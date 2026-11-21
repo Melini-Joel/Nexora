@@ -462,3 +462,68 @@ static func make_campfire() -> Station:
 	collision.position.y = 0.25
 	root.add_child(collision)
 	return root
+
+
+# --- Barco y naufragio (historia) ---------------------------------------------------------
+
+const SHIP_WOOD := Color(0.36, 0.22, 0.13)
+const SAIL := Color(0.9, 0.86, 0.74)
+
+
+## El barco "Albatros" (la proa apunta hacia -Z). Unos 20 m de largo.
+static func make_ship() -> Node3D:
+	var root := Node3D.new()
+	root.name = "Ship"
+	var parts: Array = [
+		[box(Vector3(4.2, 2.2, 16)), _at(Vector3(0, 1.1, 0)), SHIP_WOOD],
+		[cylinder(0.0, 2.15, 4.5, 4), _at(Vector3(0, 1.1, -10.2), Vector3(-PI / 2, PI / 4, 0), Vector3(1, 1, 0.75)), SHIP_WOOD],
+		[box(Vector3(4.3, 0.3, 16.1)), _at(Vector3(0, 1.9, 0)), Color(0.5, 0.16, 0.12)],
+		[box(Vector3(3.9, 0.15, 15.5)), _at(Vector3(0, 2.25, 0)), Color(0.6, 0.45, 0.3)],
+		[box(Vector3(3.0, 1.8, 3.5)), _at(Vector3(0, 3.2, 4.8)), Color(0.85, 0.82, 0.76)],
+		[box(Vector3(3.3, 0.2, 3.8)), _at(Vector3(0, 4.15, 4.8)), SHIP_WOOD],
+		[cylinder(0.12, 0.17, 11.0, 6), _at(Vector3(0, 7.7, -3.0)), SHIP_WOOD.darkened(0.2)],
+		[cylinder(0.1, 0.15, 9.0, 6), _at(Vector3(0, 6.7, 2.2)), SHIP_WOOD.darkened(0.2)],
+		[box(Vector3(5.2, 4.6, 0.08)), _at(Vector3(0, 8.0, -3.2)), SAIL],
+		[box(Vector3(4.2, 3.6, 0.08)), _at(Vector3(0, 7.0, 2.0)), SAIL],
+		[box(Vector3(5.6, 0.12, 0.12)), _at(Vector3(0, 10.4, -3.1)), SHIP_WOOD],
+		[box(Vector3(0.9, 0.5, 0.03)), _at(Vector3(0.45, 13.0, -3.0)), Color(0.75, 0.2, 0.15)],
+	]
+	_add_mesh(root, combine(parts), Vector3.ZERO)
+	var lantern := _add_mesh(root, box_mesh(Vector3(0.3, 0.4, 0.3), FIRE, 4.0), Vector3(0, 4.5, 7.6))
+	lantern.name = "Lantern"
+	var light := OmniLight3D.new()
+	light.light_color = FIRE
+	light.light_energy = 2.5
+	light.omni_range = 14.0
+	light.position = Vector3(0, 4.6, 7.6)
+	root.add_child(light)
+	return root
+
+
+## Restos del Albatros en la playa: el casco partido, un mástil caído, cajas y barriles.
+static func make_shipwreck() -> StaticBody3D:
+	var root := StaticBody3D.new()
+	root.name = "Shipwreck"
+	var old_wood := Color(0.42, 0.32, 0.24)
+	var parts: Array = [
+		# Proa clavada en la arena, inclinada.
+		[box(Vector3(4.2, 2.2, 8)), _at(Vector3(0, 0.6, -3.5), Vector3(0.12, 0.1, 0.45)), old_wood],
+		[cylinder(0.0, 2.15, 4.0, 4), _at(Vector3(0.4, 0.9, -9.3), Vector3(-PI / 2 + 0.12, PI / 4 + 0.1, 0.45), Vector3(1, 1, 0.75)), old_wood],
+		[box(Vector3(4.3, 0.3, 8.1)), _at(Vector3(-0.35, 1.35, -3.5), Vector3(0.12, 0.1, 0.45)), Color(0.45, 0.2, 0.16)],
+		# Popa separada, más adentro del agua.
+		[box(Vector3(4.2, 2.0, 6)), _at(Vector3(2.5, 0.2, 7.0), Vector3(-0.15, -0.35, -0.3)), old_wood.darkened(0.1)],
+		[box(Vector3(3.0, 1.6, 3.0)), _at(Vector3(2.9, 1.6, 7.8), Vector3(-0.15, -0.35, -0.3)), Color(0.7, 0.68, 0.62)],
+		# Mástil caído y vela rota.
+		[cylinder(0.12, 0.17, 10.0, 6), _at(Vector3(-4.5, 0.3, 1.0), Vector3(0, 0.3, PI / 2 - 0.08)), old_wood.darkened(0.25)],
+		[box(Vector3(3.6, 0.05, 2.6)), _at(Vector3(-5.0, 0.12, 3.0), Vector3(0.05, 0.4, 0.02)), SAIL.darkened(0.15)],
+		# Cajas y barriles desparramados.
+		[box(Vector3(0.9, 0.9, 0.9)), _at(Vector3(-2.5, 0.35, -6.0), Vector3(0, 0.5, 0.2)), Color(0.6, 0.45, 0.28)],
+		[box(Vector3(0.8, 0.8, 0.8)), _at(Vector3(-3.4, 0.3, -5.0), Vector3(0.2, 1.1, 0)), Color(0.55, 0.42, 0.26)],
+		[box(Vector3(0.9, 0.9, 0.9)), _at(Vector3(3.8, 0.3, -2.0), Vector3(0, 0.2, 0.3)), Color(0.58, 0.44, 0.27)],
+		[cylinder(0.38, 0.38, 1.0, 8), _at(Vector3(-1.5, 0.35, 3.5), Vector3(PI / 2, 0.6, 0)), Color(0.45, 0.3, 0.18)],
+		[cylinder(0.38, 0.38, 1.0, 8), _at(Vector3(4.6, 0.45, 2.5)), Color(0.45, 0.3, 0.18)],
+	]
+	_add_mesh(root, combine(parts), Vector3.ZERO)
+	_box_collision(root, Vector3(4.4, 2.6, 8.5), Vector3(0, 0.6, -3.5))
+	_box_collision(root, Vector3(4.2, 2.2, 6.0), Vector3(2.5, 0.3, 7.0))
+	return root

@@ -32,6 +32,7 @@ func _ready() -> void:
 	_build_display_tab(_add_tab(tabs, "Pantalla"))
 	_build_camera_tab(_add_tab(tabs, "Cámara"))
 	_build_graphics_tab(_add_tab(tabs, "Gráficos"))
+	_build_sound_tab(_add_tab(tabs, "Sonido"))
 
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 12)
@@ -107,6 +108,15 @@ func _build_graphics_tab(grid: GridContainer) -> void:
 	var info := UIStyle.label(
 		"Baja: sin sombras ni suavizado, render al 75%. Ideal para PCs viejas o notebooks.\n" +
 		"Media: sombras y suavizado 2x.\nAlta: sombras de largo alcance y suavizado 4x.", 14, UIStyle.TEXT_DIM)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.custom_minimum_size = Vector2(300, 0)
+	grid.add_child(info)
+
+
+func _build_sound_tab(grid: GridContainer) -> void:
+	_add_slider(grid, "Música", "music_volume", 0.0, 1.0, 0.05, "%d%%", 100.0)
+	_add_slider(grid, "Efectos y ambiente", "sfx_volume", 0.0, 1.0, 0.05, "%d%%", 100.0)
+	var info := UIStyle.label("Todos los sonidos y la música del juego se generan por síntesis (tools/gen_audio.py).", 14, UIStyle.TEXT_DIM)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.custom_minimum_size = Vector2(300, 0)
 	grid.add_child(info)

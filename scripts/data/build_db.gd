@@ -3,16 +3,23 @@ extends RefCounted
 ## Piezas de construcción. Se desbloquean aprendiendo planos (ítems "bp_...").
 ##
 ##   kind: foundation (cimiento), wall (pared), doorway (pared con puerta), roof (techo/piso),
-##         campfire (fogata, funciona como estación de cocina)
+##         campfire (fogata, funciona como estación de cocina), storage (caja de almacenamiento),
+##         bed (cama: reaparecés ahí al morir)
 ##   cost: materiales que gasta
-##   requires: planos que tiene que conocer el grupo
+##   requires: planos que tiene que conocer el grupo ([] = disponible desde el principio)
 ##   material: "wood" o "stone" (define el aspecto)
 
 const GRID := 3.0  ## Tamaño de cada casillero de construcción (m).
 const WALL_HEIGHT := 3.0
 const BUILD_RANGE := 9.0
 
+const STORAGE_SLOTS := 18  ## Casilleros de una caja de almacenamiento.
+
 const PIECES := {
+	"storage_box": {"name": "Caja de almacenamiento", "kind": "storage", "material": "wood",
+		"cost": {"wood": 80}, "requires": []},
+	"bed": {"name": "Cama", "kind": "bed", "material": "wood",
+		"cost": {"wood": 40, "fiber": 40}, "requires": []},
 	"wood_foundation": {"name": "Cimiento de madera", "kind": "foundation", "material": "wood",
 		"cost": {"wood": 60}, "requires": ["bp_foundation"]},
 	"wood_wall": {"name": "Pared de madera", "kind": "wall", "material": "wood",

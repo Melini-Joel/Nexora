@@ -16,6 +16,9 @@ var _speed_label: Label
 var _details_name: Label
 var _details_description: Label
 var _details_stats: Label
+var _storage_panel: PanelContainer
+var _storage_slots: Array[ItemSlot] = []
+var _details_panel: PanelContainer
 var _queue_panel: PanelContainer
 var _queue_box: VBoxContainer
 var _queue_progress: ProgressBar
@@ -24,7 +27,7 @@ var _queue_progress: ProgressBar
 ## Zona invisible detrás del inventario: soltar un objeto acá lo tira al suelo.
 class DropZone extends Control:
 	func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-		return data is Dictionary and data.has("inventory_slot")
+		return data is Dictionary and data.has("inventory_slot") and data.get("source", "player") == "player"
 
 	func _drop_data(_at_position: Vector2, data: Variant) -> void:
 		Game.send_action("drop", [data["inventory_slot"]])
@@ -52,6 +55,7 @@ func _ready() -> void:
 
 	_build_main_grid(row_width)
 	_build_details_panel(row_width)
+	_build_storage_panel(row_width)
 	_build_crafting_panel(row_width)
 	_build_hotbar(row_width)
 	_build_weight_panel(row_width)
@@ -59,6 +63,7 @@ func _ready() -> void:
 
 	Game.inventory_changed.connect(_refresh)
 	Game.craft_queue_changed.connect(_refresh_queue)
+	Game.storage_changed.connect(_refresh_storage)
 	Game.selected_slot_changed.connect(func(_i: int): _refresh())
 	Game.inventory_toggled.connect(_on_inventory_toggled)
 	Cinematics.started.connect(func(): visible = false)
@@ -124,6 +129,7 @@ func _build_details_panel(row_width: float) -> void:
 	var bottom := -20 - ItemSlot.SLOT_SIZE - 14
 	_bottom_center(panel, row_width / 2 + 24, row_width / 2 + 304, bottom - 200, bottom, Control.GROW_DIRECTION_END)
 	_window.add_child(panel)
+	_details_panel = panel
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 6)
 	panel.add_child(box)
@@ -160,6 +166,40 @@ func _build_weight_panel(row_width: float) -> void:
 	box.add_child(_weight_bar)
 	_speed_label = UIStyle.label("", 13, UIStyle.TEXT_DIM)
 	box.add_child(_speed_label)
+
+
+## Caja de almacenamiento abierta: aparece a la derecha del inventario (en lugar de los detalles).
+func _build_storage_panel(row_width: float) -> void:
+	_storage_panel = UIStyle.panel(Color(0.08, 0.09, 0.09, 0.9), 10)
+	_storage_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var bottom := -20 - ItemSlot.SLOT_SIZE - 14
+	var width := COLUMNS * ItemSlot.SLOT_SIZE + (COLUMNS - 1) * GAP + 20
+	_bottom_center(_storage_panel, row_width / 2 + 24, row_width / 2 + 24 + width, bottom - 300, bottom, Control.GROW_DIRECTION_END)
+	_storage_panel.visible = false
+	_window.add_child(_storage_panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	_storage_panel.add_child(box)
+	box.add_child(UIStyle.label("CAJA DE ALMACENAMIENTO", 18, UIStyle.ACCENT))
+	var grid := GridContainer.new()
+	grid.columns = COLUMNS
+	grid.add_theme_constant_override("h_separation", int(GAP))
+	grid.add_theme_constant_override("v_separation", int(GAP))
+	box.add_child(grid)
+	for i in BuildDB.STORAGE_SLOTS:
+		var slot := ItemSlot.new(i, false, "storage")
+		grid.add_child(slot)
+		_storage_slots.append(slot)
+	var help := UIStyle.label("Arrastrá entre tu mochila y la caja · Shift+Click: pasar todo", 12, UIStyle.TEXT_DIM)
+	box.add_child(help)
+
+
+func _refresh_storage() -> void:
+	var open := Game.storage_box != ""
+	_storage_panel.visible = open
+	_details_panel.visible = not open
+	for slot in _storage_slots:
+		slot.refresh()
 
 
 func _build_crafting_panel(row_width: float) -> void:

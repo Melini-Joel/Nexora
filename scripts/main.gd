@@ -24,6 +24,10 @@ func _ready() -> void:
 		add_child(_backdrop)
 	menu = MainMenu.new()
 	add_child(menu)
+	Sound.stop_all_ambience()
+	Sound.set_music("menu")
+	Sound.set_ambience("fire", 0.5 if _backdrop else 0.0)
+	Sound.set_ambience("wind", 0.4 if _backdrop else 0.0)
 	menu.start_pressed.connect(_start_hosting)
 	menu.join_pressed.connect(_on_join_pressed)
 	Network.joined_world.connect(_on_joined_world)
@@ -83,6 +87,7 @@ func _on_connection_failed(reason: String) -> void:
 
 func _enter_world(world_seed: int, state: Dictionary, play_intro: bool = true) -> void:
 	menu.visible = false
+	Sound.stop_all_ambience()
 	if is_instance_valid(_backdrop):
 		remove_child(_backdrop)
 		_backdrop.queue_free()

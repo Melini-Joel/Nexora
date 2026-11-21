@@ -18,6 +18,8 @@ signal player_hit(amount: float)
 signal player_died
 signal blueprints_changed
 signal station_opened(station: String)
+signal storage_changed
+signal map_open_changed(is_open: bool)
 
 ## Copia local del inventario (la verdad la tiene el servidor).
 var inventory: Array = []
@@ -33,6 +35,12 @@ var hunger := 100.0
 var stamina := 100.0
 ## Estación abierta con E ("" = inventario normal con Tab).
 var current_station := ""
+## Caja de almacenamiento abierta ("" = ninguna) y su contenido.
+var storage_box := ""
+var storage_slots: Array = []
+var map_open := false
+## Dónde murió el jugador por última vez (se marca en el mapa).
+var last_death_position := Vector3.INF
 var local_player: Node = null
 ## Mensaje para mostrar en el menú después de volver (p. ej. "se cayó la conexión").
 var pending_menu_message := ""
@@ -87,8 +95,39 @@ func open_station(station: String) -> void:
 	station_opened.emit(station)
 
 
+func set_storage(box_name: String, slots: Array, opening: bool) -> void:
+	if not opening and box_name != storage_box:
+		return  # Llegó una actualización de una caja que ya cerré.
+	storage_box = box_name
+	storage_slots = slots
+	if opening and not inventory_open:
+		set_inventory_open(true)
+	storage_changed.emit()
+
+
+func get_storage_slot(index: int) -> Dictionary:
+	return storage_slots[index] if index >= 0 and index < storage_slots.size() else {}
+
+
+func set_map_open(is_open: bool) -> void:
+	if is_open and inventory_open:
+		set_inventory_open(false)
+	map_open = is_open
+	_update_mouse()
+	map_open_changed.emit(is_open)
+
+
 func set_craft_queue(queue: Array) -> void:
+	if _queue_total(queue) < _queue_total(craft_queue):
+		Sound.play("craft_done", Vector3.INF, -4.0)
 	craft_queue = queue
+
+
+func _queue_total(queue: Array) -> int:
+	var total := 0
+	for job in queue:
+		total += int(job["remaining"])
+	return total
 	craft_queue_changed.emit()
 
 
@@ -136,13 +175,18 @@ func can_control_player() -> bool:
 
 ## ¿Se puede mirar con el mouse, golpear y recoger?
 func can_act() -> bool:
-	return can_control_player() and not inventory_open
+	return can_control_player() and not inventory_open and not map_open
 
 
 func set_inventory_open(is_open: bool) -> void:
 	inventory_open = is_open
 	if not is_open:
 		current_station = ""
+		if storage_box != "":
+			send_action("storage_close", [storage_box])
+			storage_box = ""
+			storage_slots = []
+			storage_changed.emit()
 	_update_mouse()
 	inventory_toggled.emit(is_open)
 
@@ -156,7 +200,7 @@ func set_pause_open(is_open: bool) -> void:
 
 
 func _update_mouse() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if (ui_open or inventory_open or dialog_open) else Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if (ui_open or inventory_open or dialog_open or map_open) else Input.MOUSE_MODE_CAPTURED
 
 
 func reset() -> void:
@@ -170,6 +214,10 @@ func reset() -> void:
 	hunger = 100.0
 	stamina = 100.0
 	current_station = ""
+	storage_box = ""
+	storage_slots = []
+	map_open = false
+	last_death_position = Vector3.INF
 	local_player = null
 
 
@@ -187,6 +235,7 @@ func _setup_input() -> void:
 	_add_keys("inventory", [KEY_TAB, KEY_I])
 	_add_keys("camera_toggle", [KEY_V])
 	_add_keys("build_rotate", [KEY_R])
+	_add_keys("map", [KEY_M])
 	_add_mouse_button("secondary", MOUSE_BUTTON_RIGHT)
 	_add_keys("pause", [KEY_ESCAPE])
 	_add_keys("skip_cinematic", [KEY_ESCAPE, KEY_ENTER, KEY_SPACE])

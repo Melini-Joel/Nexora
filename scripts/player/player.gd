@@ -106,6 +106,7 @@ func _build_body() -> void:
 	_body = Humanoid.new()
 	_body.build(look)
 	model.add_child(_body)
+	_body.step.connect(func(): Sound.play("step", global_position, -14.0 if _body.move_speed < 6.0 else -9.0, 0.15))
 	_hand = _body.hand_attach
 	_backpack = _mesh_part(_box(Vector3(0.36, 0.42, 0.2)), Color(0.45, 0.32, 0.2), Vector3.ZERO, _body.back_attach)
 	_mesh_part(_box(Vector3(0.3, 0.12, 0.06)), Color(0.38, 0.27, 0.17), Vector3(0, -0.12, 0.1), _backpack)
@@ -228,8 +229,14 @@ func _apply_camera_settings() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority() or Cinematics.playing:
 		return
+	if event.is_action_pressed("map") and not Game.ui_open and not Game.dialog_open:
+		Game.set_map_open(not Game.map_open)
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("pause"):
-		if Game.inventory_open:
+		if Game.map_open:
+			Game.set_map_open(false)
+		elif Game.inventory_open:
 			Game.set_inventory_open(false)
 		else:
 			Game.set_pause_open(not Game.ui_open)
@@ -473,6 +480,10 @@ func _handle_actions(delta: float) -> void:
 			Game.send_action("chest", [str(_focused.name)])
 		elif _focused is BuildPiece and _focused.kind() == "doorway":
 			Game.send_action("door", [str(_focused.name)])
+		elif _focused is BuildPiece and _focused.kind() == "storage":
+			Game.send_action("storage_open", [str(_focused.name)])
+		elif _focused is BuildPiece and _focused.kind() == "bed":
+			Game.send_action("bed_claim", [str(_focused.name)])
 		elif _focused is Creature:
 			if _focused.tamed_owner != "":
 				Game.send_action("pet", [str(_focused.name)])
@@ -511,6 +522,7 @@ func _handle_actions(delta: float) -> void:
 		Game.send_action("gather", [str(_focused.name)])
 	elif click_once and ItemDB.is_food(held_item):
 		_action_cooldown = 0.6
+		Sound.play("eat")
 		Game.send_action("eat", [Game.selected_slot])
 	elif click_once and ItemDB.is_blueprint(held_item):
 		_action_cooldown = 0.6
@@ -529,6 +541,7 @@ func _face(target: Vector3) -> void:
 @rpc("authority", "call_local", "unreliable")
 func play_swing() -> void:
 	_body.play_swing()
+	Sound.play("swing", global_position + Vector3.UP, -6.0)
 
 
 # --- Modo construcción -----------------------------------------------------------------

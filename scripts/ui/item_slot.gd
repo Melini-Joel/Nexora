@@ -9,6 +9,7 @@ extends Panel
 const SLOT_SIZE := 68.0
 
 var index := 0
+var source := "player"  ## "player" = tu inventario · "storage" = la caja abierta
 var selected := false:
 	set(value):
 		selected = value
@@ -19,8 +20,9 @@ var _count: Label
 var _style := StyleBoxFlat.new()
 
 
-func _init(p_index: int, show_number: bool = false) -> void:
+func _init(p_index: int, show_number: bool = false, p_source: String = "player") -> void:
 	index = p_index
+	source = p_source
 	custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_style.set_corner_radius_all(4)
@@ -50,8 +52,12 @@ func _init(p_index: int, show_number: bool = false) -> void:
 	_update_style()
 
 
+func _slot() -> Dictionary:
+	return Game.get_storage_slot(index) if source == "storage" else Game.get_slot(index)
+
+
 func refresh() -> void:
-	var slot := Game.get_slot(index)
+	var slot := _slot()
 	var id: String = slot.get("id", "")
 	_icon.item_id = id
 	var count: int = slot.get("count", 0)
@@ -66,17 +72,17 @@ func _update_style() -> void:
 
 
 func _get_drag_data(_at_position: Vector2) -> Variant:
-	if not Game.inventory_open or Game.get_slot(index).is_empty():
+	if not Game.inventory_open or _slot().is_empty():
 		return null
 	var preview := ItemIcon.new()
-	preview.item_id = Game.get_slot(index)["id"]
+	preview.item_id = _slot()["id"]
 	preview.size = Vector2(56, 56)
 	preview.position = -preview.size / 2
 	preview.modulate.a = 0.85
 	var holder := Control.new()
 	holder.add_child(preview)
 	set_drag_preview(holder)
-	return {"inventory_slot": index}
+	return {"inventory_slot": index, "source": source}
 
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
@@ -84,16 +90,25 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
-	if data["inventory_slot"] != index:
-		Game.send_action("move", [data["inventory_slot"], index])
+	var from_source: String = data.get("source", "player")
+	if from_source == "player" and source == "player":
+		if data["inventory_slot"] != index:
+			Game.send_action("move", [data["inventory_slot"], index])
+	elif Game.storage_box != "":
+		# Entre la mochila y la caja (o dentro de la caja).
+		Game.send_action("storage_move", [Game.storage_box, "s" if from_source == "storage" else "p",
+			data["inventory_slot"], "s" if source == "storage" else "p", index])
 
 
 func _gui_input(event: InputEvent) -> void:
 	if not Game.inventory_open or not event is InputEventMouseButton or not event.pressed:
 		return
-	if event.button_index == MOUSE_BUTTON_RIGHT:
+	if event.button_index == MOUSE_BUTTON_RIGHT and source == "player":
 		Game.send_action("split", [index])
 		accept_event()
 	elif event.button_index == MOUSE_BUTTON_LEFT and event.shift_pressed:
-		Game.send_action("quick_move", [index])
+		if Game.storage_box != "":
+			Game.send_action("storage_quick", [Game.storage_box, "s" if source == "storage" else "p", index])
+		else:
+			Game.send_action("quick_move", [index])
 		accept_event()

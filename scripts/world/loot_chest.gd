@@ -32,6 +32,8 @@ func get_interact_text() -> String:
 
 
 func set_opened(value: bool) -> void:
+	if value and not opened:
+		Sound.play("chest_open", global_position + Vector3.UP)
 	opened = value
 	create_tween().tween_property(_lid, "rotation:x", -1.7 if value else 0.0, 0.5) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

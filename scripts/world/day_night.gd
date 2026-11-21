@@ -16,6 +16,10 @@ const NIGHT_HORIZON := Color(0.06, 0.08, 0.16)
 
 var time := 0.3  ## 0 = medianoche, 0.25 = amanecer, 0.5 = mediodía, 0.75 = atardecer.
 var day := 1
+## Solo para cinemáticas (local): fuerza una hora sin cambiar la real (-1 = sin forzar).
+var override_time := -1.0
+## Tormenta (0..1): cielo más oscuro, niebla densa y menos luz. Solo para cinemáticas.
+var storm := 0.0
 
 var sun: DirectionalLight3D
 var moon: DirectionalLight3D
@@ -75,7 +79,8 @@ func _process(delta: float) -> void:
 
 
 func _apply() -> void:
-	var angle := (time - 0.25) * TAU  # 0 = amanecer, PI/2 = mediodía, PI = atardecer
+	var shown_time := override_time if override_time >= 0.0 else time
+	var angle := (shown_time - 0.25) * TAU  # 0 = amanecer, PI/2 = mediodía, PI = atardecer
 	var elevation := sin(angle)
 	var day_factor := clampf(elevation * 3.5 + 0.15, 0.0, 1.0)
 	var sunset := clampf(1.0 - absf(elevation) * 3.0, 0.0, 1.0) * clampf(elevation * 5.0 + 1.0, 0.0, 1.0)
@@ -96,6 +101,9 @@ func _apply() -> void:
 	sky.sky_horizon_color = horizon
 	sky.ground_horizon_color = horizon.darkened(0.2)
 	sky.ground_bottom_color = Color(0.04, 0.08, 0.12).lerp(Color(0.12, 0.3, 0.42), day_factor)
-	environment.ambient_light_energy = lerpf(0.35, 1.0, day_factor)
-	environment.fog_light_color = horizon
-	environment.fog_density = lerpf(0.0035, 0.0012, day_factor)
+	environment.ambient_light_energy = lerpf(0.35, 1.0, day_factor) * (1.0 - storm * 0.4)
+	environment.fog_light_color = horizon.lerp(Color(0.12, 0.14, 0.18), storm)
+	environment.fog_density = lerpf(0.0035, 0.0012, day_factor) + storm * 0.012
+	if storm > 0.0:
+		sky.sky_top_color = top.lerp(Color(0.04, 0.05, 0.07), storm)
+		sky.sky_horizon_color = horizon.lerp(Color(0.1, 0.12, 0.15), storm)

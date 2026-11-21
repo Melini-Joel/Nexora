@@ -15,6 +15,9 @@ var sync_rot := 0.0
 var anim_speed := 0.0
 var health_ratio := 1.0:
 	set(value):
+		if value < health_ratio - 0.001 and is_inside_tree():
+			Sound.play("creature_hurt", global_position + Vector3.UP, 0.0, 0.2)
+			Sound.play("hit", global_position + Vector3.UP, -4.0)
 		health_ratio = value
 		_update_label()
 var tamed_owner := "":  ## Nombre del dueño ("" = salvaje).
@@ -38,6 +41,8 @@ var attack_count := 0:
 		attack_count = value
 var dead := false:
 	set(value):
+		if value and not dead and is_inside_tree():
+			Sound.play("creature_die", global_position + Vector3.UP)
 		dead = value
 		if value and _body is Quadruped:
 			_body.play_death()
@@ -152,6 +157,20 @@ func is_tameable_with(item: String) -> bool:
 
 
 # --- Clientes: interpolar lo que manda el servidor ---------------------------------------
+
+var _whisper_timer := 3.0
+
+
+func _process(delta: float) -> void:
+	# Las sombras susurran cuando están cerca del jugador.
+	if dead or not CreatureDB.is_mob(species) or Game.local_player == null:
+		return
+	_whisper_timer -= delta
+	if _whisper_timer <= 0.0:
+		_whisper_timer = randf_range(4.0, 9.0)
+		if global_position.distance_to(Game.local_player.global_position) < 30.0:
+			Sound.play("shade_whisper", global_position + Vector3.UP * 1.5, -2.0, 0.2)
+
 
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():

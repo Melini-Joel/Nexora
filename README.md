@@ -5,6 +5,10 @@ Estilo low-poly: liviano para cualquier PC, pero con iluminación, sombras, nieb
 
 ![Menú principal](docs/21_menu.png)
 
+![Cinemática del naufragio](docs/28_intro_tormenta.png)
+
+![Mapa de la isla](docs/33_mapa.png)
+
 ![Construcción y animales](docs/17_construccion_animales.png)
 
 ![Noche con sombras](docs/18_noche_sombras.png)
@@ -95,6 +99,7 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 | R | Con el martillo: cambiar de pieza |
 | 1-6 / rueda del mouse | Elegir objeto de la barra rápida |
 | Tab / I | Abrir inventario |
+| M | Mapa de la isla |
 | V | Cámara cerca / normal / lejos |
 | Esc | Cerrar inventario · menú de pausa · saltear cinemática |
 
@@ -108,6 +113,9 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 | Soltar fuera del inventario | Tirar al suelo en una bolsa (cualquier compañero la puede recoger) |
 
 ## Qué incluye este prototipo
+
+### Historia
+- **Cinemática de inicio (1 minuto):** el barco *Albatros* queda atrapado en una tormenta, choca contra los arrecifes de una isla que no figura en los mapas y los sobrevivientes despiertan en la playa. Hay lluvia, rayos, olas y sacudones de cámara. Los **restos del naufragio** quedan en la costa para explorarlos, con dos cofres. Se puede saltear con Esc.
 
 ### Mundo
 - **Isla de 512 × 512 m** (4 veces más grande) con **4 biomas**: Pradera, Bosque, Desierto y Tundra nevada. Cada uno tiene sus colores, árboles, recursos y animales. Arriba de la pantalla se ve en qué bioma estás.
@@ -129,6 +137,17 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 - **Planos:** se encuentran en **30 cofres** repartidos por la isla (se rellenan cada 8 minutos) o derrotando sombras. Click con el plano en la mano lo aprende **todo el grupo**.
 - **Martillo:** con el martillo en la mano ves una vista previa (verde si se puede construir, rojo si no). R cambia de pieza, click construye y click derecho desarma.
 - **Piezas:** cimiento, pared, puerta que se abre con E, techo (que sirve de segundo piso) y fogata, en versiones de madera y de piedra. Encajan solas en una cuadrícula de 3 m.
+
+### Mapa, brújula, cajas y camas
+- **Mapa (M):** relieve y biomas desde arriba, con vos y tus compañeros, los habitantes, los lugares importantes, el objetivo de la misión, tus camas y construcciones, tus mascotas y el lugar donde moriste.
+- **Brújula** arriba de la pantalla: muestra hacia dónde mirás y la dirección del campamento, de tu cama y del objetivo de la misión.
+- **Caja de almacenamiento** (18 casilleros) y **cama**: se construyen con el martillo desde el principio, sin plano. Arrastrá objetos entre tu mochila y la caja, o usá Shift+Click. Si morís, reaparecés en tu cama (E sobre una cama la hace tuya). Todo se guarda con la partida.
+
+### Sonido y música
+- Efectos para los pasos, la tala, la piedra, los golpes, las criaturas, las puertas, los cofres, la comida, la construcción y las misiones, más los truenos de la cinemática.
+- Ambientes en loop: viento, olas cerca del mar, grillos de noche, lluvia y fuego crepitando en fogatas y hornos.
+- Música ambiental que cambia entre el menú, el día y la noche.
+- **Todo se genera por síntesis** con `tools/gen_audio.py` (Python + numpy + scipy): no se usan sonidos de terceros. El volumen se ajusta en Opciones → Sonido.
 
 ### Estaciones
 - **Mesa de trabajo, horno y fogatas:** apretá E y se abre el inventario solo con las recetas de esa estación.
@@ -162,6 +181,7 @@ scripts/
   main.gd              Menú → mundo, argumentos de línea de comandos
   autoload/
     save_manager.gd    Guardado y carga de mundos (user://saves)
+    sound.gd           Efectos, ambientes y música
     settings.gd        Opciones del jugador (se guardan en user://settings.cfg)
     game.gd            Estado local: inventario, barra rápida, peso, controles, pausa
     network.gd         Host / unirse, registro de jugadores (ENet)
@@ -190,7 +210,11 @@ scripts/
   world/station.gd     Estaciones interactuables
   world/loot_chest.gd  Cofres con botín
   characters/quadruped.gd  Cuerpo y animaciones de los animales
+  world/intro_stage.gd Escenario de la cinemática del naufragio (barco, tormenta)
+  ui/map_ui.gd         Mapa de la isla (tecla M)
 shaders/               Pasto y agua
+audio/                 Sonidos y música (generados por tools/gen_audio.py)
+tools/gen_audio.py     Generador de audio por síntesis
   player/player.gd     Movimiento, peso, cámara 3ª persona, herramientas, interacción
   ui/
     inventory_ui.gd    Barra rápida, ventana de inventario, indicador de carga
@@ -219,7 +243,8 @@ shaders/               Pasto y agua
 5. ~~Fabricación, NPCs con misiones y personajes animados~~ ✅
 6. ~~Biomas, día/noche, supervivencia, combate, animales, domesticación y construcción~~ ✅
 7. ~~Menú con fondo animado, modo solo y guardado de partidas~~ ✅
-8. Mapa (tecla M) y brújula
-9. Cofres de almacenamiento, camas para reaparecer en tu base
-10. Sonido y música
-11. Modelos con esqueleto (Blender / Mixamo)
+8. ~~Mapa (tecla M) y brújula~~ ✅
+9. ~~Cajas de almacenamiento y camas para reaparecer en tu base~~ ✅
+10. ~~Sonido y música~~ ✅
+11. ~~Cinemática de inicio: el naufragio del Albatros~~ ✅
+12. Modelos con esqueleto (Blender / Mixamo): hacen falta modelos 3D hechos por un artista. Los personajes actuales son articulados y se animan por código. Si se agregan modelos `.glb` (por ejemplo, packs gratuitos CC0), se pueden integrar manteniendo la misma interfaz de `Humanoid`.

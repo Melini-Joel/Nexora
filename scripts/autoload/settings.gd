@@ -19,6 +19,8 @@ const DEFAULTS := {
 	"invert_y": false,
 	"quality": "medium",
 	"player_name": "",
+	"music_volume": 0.6,
+	"sfx_volume": 0.8,
 	"last_ip": "127.0.0.1",
 }
 const WINDOW_MODES := {"windowed": "Ventana", "maximized": "Ventana maximizada", "fullscreen": "Pantalla completa"}

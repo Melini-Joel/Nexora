@@ -31,6 +31,7 @@ const BIOME_SPAWNS := {
 const ORE_CHANCE := {"meadow": 0.2, "forest": 0.25, "desert": 0.5, "tundra": 0.4}
 
 var generated := false
+var generated_at_ms := 0
 var terrain: TerrainGenerator
 var day_night: DayNight
 ## Lugares importantes para misiones y cinemáticas.
@@ -58,6 +59,9 @@ var _last_attack_ms: Dictionary = {}
 var _drop_counter := 0
 var _creature_counter := 0
 var _piece_counter := 0
+var _storages: Dictionary = {}  ## nombre de la caja -> Inventory
+var _storage_viewers: Dictionary = {}  ## nombre de la caja -> [peer_id que la tienen abierta]
+var _beds: Dictionary = {}  ## nombre del jugador -> nombre de su cama
 var _craft_queues: Dictionary = {}  ## peer_id -> [{recipe, remaining, time_left, time}]
 var _animal_respawns: Array = []  ## [especie, segundos]
 var _tick := 0.0
@@ -67,6 +71,7 @@ var _spatial: Dictionary = {}  ## Grilla para separar objetos al ubicarlos.
 var _crystal: Node3D
 var _crystal_base_y := 0.0
 var _sun: DirectionalLight3D
+var _water_material: ShaderMaterial
 var _environment: Environment
 var _time := 0.0
 
@@ -93,6 +98,7 @@ func _process(delta: float) -> void:
 	if _crystal:
 		_crystal.rotation.y = _time * 0.8
 		_crystal.position.y = _crystal_base_y + sin(_time * 1.5) * 0.25
+	_update_audio()
 	if multiplayer.is_server() and Network.is_online():
 		_update_respawns(delta)
 		_update_crafting(delta)
@@ -100,6 +106,21 @@ func _process(delta: float) -> void:
 		if _tick <= 0.0:
 			_tick = 1.0
 			_server_tick()
+
+
+## Música y ambiente según la hora y dónde está el jugador.
+func _update_audio() -> void:
+	if Engine.get_process_frames() % 15 != 0 or Game.local_player == null:
+		return
+	if get_node_or_null("IntroStage") != null and Cinematics.playing:
+		return  # La cinemática de inicio maneja su propio sonido.
+	var night := is_night()
+	Sound.set_music("night" if night else "day")
+	var height: float = Game.local_player.global_position.y
+	Sound.set_ambience("wind", clampf(0.3 + height / 60.0, 0.3, 1.2) * (0.6 if night else 1.0))
+	Sound.set_ambience("night", 0.8 if night else 0.0)
+	Sound.set_ambience("waves", clampf(1.0 - (height - TerrainGenerator.WATER_LEVEL) / 8.0, 0.0, 1.0))
+	Sound.set_ambience("rain", 0.0)
 
 
 func is_night() -> bool:
@@ -126,6 +147,7 @@ func generate(world_seed: int) -> void:
 		add_child(grass)
 		grass.setup(terrain, world_seed)
 	generated = true
+	generated_at_ms = Time.get_ticks_msec()
 	if multiplayer.is_server():
 		_spawn_initial_animals()
 	Game.world_generated.emit()
@@ -196,6 +218,7 @@ func _build_water() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/water.gdshader")
 	plane.material = mat
+	_water_material = mat
 	var water := MeshInstance3D.new()
 	water.name = "Water"
 	water.mesh = plane
@@ -244,10 +267,51 @@ func _place_settlements() -> void:
 	_spawn_npc("eco", landmarks["hermit_npc"])
 
 	_place_dock(-to_monolith)
+	_place_wreck((-to_monolith).rotated(PI * 0.6))
 
 	var lookout := terrain.find_highest_point(TerrainGenerator.SIZE * 0.42, Vector2(monolith.x, monolith.z), 120.0)
 	landmarks["lookout"] = lookout
 	_place_prop(PropFactory.make_cairn(), lookout - Vector3(0, 0.2, 0), Vector3.ZERO)
+
+
+## Altura de las olas (0.08 = calmo, 0.9 = tormenta). Lo usa la cinemática de inicio.
+func set_wave_height(height: float) -> void:
+	if _water_material:
+		_water_material.set_shader_parameter("wave_height", height)
+
+
+## Restos del Albatros en otra costa, con dos cofres. También define dónde navega
+## el barco en la cinemática de inicio (mar adentro → arrecife → playa).
+func _place_wreck(direction: Vector2) -> void:
+	for attempt in 12:
+		var dir := direction.rotated(attempt * 0.45 * (1 if attempt % 2 == 0 else -1))
+		# Se busca la costa desde el mar abierto hacia adentro (así no confunde un lago con el mar).
+		for step in range(int(TerrainGenerator.SIZE * 0.5), 30, -1):
+			var p := dir * step
+			if terrain.get_height(p.x, p.y) < TerrainGenerator.WATER_LEVEL + 0.2:
+				continue
+			p = dir * (step + 1)  # Primer punto con agua, del lado del mar.
+			var beach := dir * (step - 2)
+			var pos := _ground(beach)
+			var wreck := PropFactory.make_shipwreck()
+			wreck.position = pos
+			wreck.rotation.y = atan2(dir.x, dir.y)  # La proa mira hacia la isla.
+			add_child(wreck)
+			landmarks["wreck"] = pos
+			landmarks["reef"] = Vector3(p.x + dir.x * 50, TerrainGenerator.WATER_LEVEL, p.y + dir.y * 50)
+			landmarks["ship_start"] = Vector3(p.x + dir.x * 230, TerrainGenerator.WATER_LEVEL, p.y + dir.y * 230)
+			landmarks["ship_yaw"] = atan2(dir.x, dir.y)
+			_clear_zones.append([beach, 14.0])
+			var side := Vector2(-dir.y, dir.x)
+			for i in 2:
+				var spot := beach + side * (6.0 if i == 0 else -7.0) - dir * 3.0
+				var chest := LootChest.new()
+				chest.name = "Chest_W%d" % i
+				chest.position = _ground(spot)
+				chest.rotation.y = 0.7 * i
+				add_child(chest)
+				chests[str(chest.name)] = chest
+			return
 
 
 func _ground(p: Vector2) -> Vector3:
@@ -512,7 +576,14 @@ func build_save() -> Dictionary:
 	var pieces: Array = []
 	for piece in pieces_root.get_children():
 		if piece is BuildPiece and not piece.is_queued_for_deletion():
-			pieces.append({"id": piece.piece_id, "position": piece.position, "rotation": piece.rotation.y, "door_open": piece.door_open})
+			var entry := {"id": piece.piece_id, "position": piece.position, "rotation": piece.rotation.y,
+				"door_open": piece.door_open, "owner": piece.owner_name}
+			if _storages.has(str(piece.name)):
+				entry["storage"] = _storages[str(piece.name)].to_array()
+			for owner in _beds:
+				if _beds[owner] == str(piece.name):
+					entry["bed_of"] = owner
+			pieces.append(entry)
 	var drops: Array = []
 	for drop in drops_root.get_children():
 		if not drop.is_queued_for_deletion():
@@ -549,7 +620,14 @@ func load_save(data: Dictionary) -> void:
 		piece.position = entry["position"]
 		piece.rotation = Vector3(0, entry["rotation"], 0)
 		piece.door_open = entry.get("door_open", false)
+		piece.owner_name = entry.get("owner", "")
 		pieces_root.add_child(piece, true)
+		if BuildDB.get_piece(entry["id"]).get("kind", "") == "storage":
+			var box := Inventory.new(BuildDB.STORAGE_SLOTS)
+			box.load_from(entry.get("storage", []))
+			_storages[str(piece.name)] = box
+		if entry.has("bed_of"):
+			_beds[entry["bed_of"]] = str(piece.name)
 	for entry in data.get("drops", []):
 		_spawn_drop(entry["item"], int(entry["count"]), entry["position"])
 	for entry in data.get("pets", []):
@@ -668,15 +746,116 @@ func _kill_player(peer_id: int, cause: String) -> void:
 	_send_inventory(peer_id)
 	_send_stats(peer_id)
 	Network.announce.rpc("%s murió %s. Sus cosas quedaron en el suelo." % [player.player_name, cause])
-	var spawn := get_spawn_point(peer_id)
+	var spawn := _respawn_point(peer_id)
 	if peer_id == multiplayer.get_unique_id():
 		_respawn_at(spawn)
 	else:
 		_respawn_at.rpc_id(peer_id, spawn)
 
 
+## Si tiene cama, reaparece al lado; si no, en el campamento.
+func _respawn_point(peer_id: int) -> Vector3:
+	var player_name: String = Network.players.get(peer_id, {}).get("name", "")
+	var bed := pieces_root.get_node_or_null(_beds.get(player_name, "-"))
+	if bed is BuildPiece:
+		return bed.global_position + bed.global_transform.basis.x * 1.2 + Vector3(0, 0.6, 0)
+	return get_spawn_point(peer_id)
+
+
+# --- Cajas de almacenamiento ------------------------------------------------------------
+
+func _storage_in_range(peer_id: int, box_name: String) -> Inventory:
+	var box := pieces_root.get_node_or_null(box_name)
+	var player := _player_node(peer_id)
+	if not box is BuildPiece or player == null or not _storages.has(box_name):
+		return null
+	var player_pos: Vector3 = player.sync_pos
+	if player_pos.distance_to(box.global_position) > 5.0:
+		return null
+	return _storages[box_name]
+
+
+func _server_storage_open(peer_id: int, box_name: String) -> void:
+	if _storage_in_range(peer_id, box_name) == null:
+		return
+	if not _storage_viewers.has(box_name):
+		_storage_viewers[box_name] = []
+	if not peer_id in _storage_viewers[box_name]:
+		_storage_viewers[box_name].append(peer_id)
+	_send_storage(box_name, [peer_id], true)
+
+
+## Mueve un objeto entre la mochila ("p") y la caja ("s"), o dentro de cada una.
+func _server_storage_move(peer_id: int, box_name: String, from_side: String, from_index: int, to_side: String, to_index: int) -> void:
+	var box := _storage_in_range(peer_id, box_name)
+	if box == null:
+		return
+	var inventory: Inventory = _inventories[peer_id]
+	var source: Inventory = box if from_side == "s" else inventory
+	var target: Inventory = box if to_side == "s" else inventory
+	if not source.is_valid(from_index) or not target.is_valid(to_index):
+		return
+	if source == target:
+		source.move(from_index, to_index)
+	else:
+		var a: Dictionary = source.slots[from_index]
+		var b: Dictionary = target.slots[to_index]
+		if a.is_empty():
+			return
+		if b.is_empty():
+			target.slots[to_index] = a
+			source.slots[from_index] = {}
+		elif b["id"] == a["id"]:
+			var n := mini(a["count"], ItemDB.stack_size(a["id"]) - b["count"])
+			b["count"] += n
+			a["count"] -= n
+			if a["count"] <= 0:
+				source.slots[from_index] = {}
+		else:
+			target.slots[to_index] = a
+			source.slots[from_index] = b
+	_send_inventory(peer_id)
+	_send_storage(box_name, _storage_viewers.get(box_name, []))
+
+
+## Shift+Click: pasa todo el casillero al otro lado.
+func _server_storage_quick(peer_id: int, box_name: String, side: String, index: int) -> void:
+	var box := _storage_in_range(peer_id, box_name)
+	if box == null:
+		return
+	var inventory: Inventory = _inventories[peer_id]
+	var source: Inventory = box if side == "s" else inventory
+	var target: Inventory = inventory if side == "s" else box
+	var stack := source.get_slot(index)
+	if stack.is_empty():
+		return
+	var leftover := target.add(stack["id"], stack["count"])
+	if leftover == 0:
+		source.slots[index] = {}
+	else:
+		stack["count"] = leftover
+	_send_inventory(peer_id)
+	_send_storage(box_name, _storage_viewers.get(box_name, []))
+
+
+func _send_storage(box_name: String, peers: Array, opening: bool = false) -> void:
+	var data: Array = _storages[box_name].to_array()
+	for peer_id in peers:
+		if peer_id == multiplayer.get_unique_id():
+			_receive_storage(box_name, data, opening)
+		elif _inventories.has(peer_id):
+			_receive_storage.rpc_id(peer_id, box_name, data, opening)
+
+
+@rpc("authority", "reliable")
+func _receive_storage(box_name: String, slots: Array, opening: bool) -> void:
+	Game.set_storage(box_name, slots, opening)
+
+
 @rpc("authority", "reliable")
 func _respawn_at(pos: Vector3) -> void:
+	if Game.local_player:
+		Game.last_death_position = Game.local_player.global_position
 	Game.player_died.emit()
 	if Game.local_player:
 		Game.local_player.respawn(pos)
@@ -767,6 +946,25 @@ func _handle_action(peer_id: int, action: String, args: Array) -> void:
 		"door":
 			if args.size() == 1:
 				_server_door(peer_id, str(args[0]))
+		"storage_open":
+			if args.size() == 1:
+				_server_storage_open(peer_id, str(args[0]))
+		"storage_close":
+			if args.size() == 1:
+				_storage_viewers.get(str(args[0]), []).erase(peer_id)
+		"storage_move":
+			if args.size() == 5:
+				_server_storage_move(peer_id, str(args[0]), str(args[1]), int(args[2]), str(args[3]), int(args[4]))
+		"storage_quick":
+			if args.size() == 3:
+				_server_storage_quick(peer_id, str(args[0]), str(args[1]), int(args[2]))
+		"bed_claim":
+			if args.size() == 1:
+				var bed := pieces_root.get_node_or_null(str(args[0]))
+				if bed is BuildPiece and bed.kind() == "bed":
+					var player_name: String = Network.players[peer_id]["name"]
+					_beds[player_name] = str(bed.name)
+					_notify_peer(peer_id, "Ahora reaparecés en esta cama.")
 	if changed:
 		_send_inventory(peer_id)
 
@@ -1172,7 +1370,7 @@ func compute_placement(piece_id: String, hit: Vector3, yaw: float) -> Dictionary
 					result["reason"] = "Ya hay un techo acá"
 				else:
 					result["valid"] = true
-		"campfire":
+		"campfire", "storage", "bed":
 			result["position"] = hit
 			result["rotation"] = yaw
 			result["valid"] = hit.y > TerrainGenerator.WATER_LEVEL + 0.2
@@ -1207,7 +1405,14 @@ func _server_build(peer_id: int, piece_id: String, hit: Variant, yaw: float) -> 
 	piece.piece_id = piece_id
 	piece.position = placement["position"]
 	piece.rotation = Vector3(0, placement["rotation"], 0)
+	piece.owner_name = Network.players.get(peer_id, {}).get("name", "")
 	pieces_root.add_child(piece, true)
+	match data["kind"]:
+		"storage":
+			_storages[str(piece.name)] = Inventory.new(BuildDB.STORAGE_SLOTS)
+		"bed":
+			_beds[piece.owner_name] = str(piece.name)
+			_notify_peer(peer_id, "Cama lista: si morís, reaparecés acá.")
 	QuestManager.report_build(piece_id)
 
 
@@ -1222,6 +1427,17 @@ func _server_demolish(peer_id: int, piece_name: String) -> void:
 	var cost: Dictionary = BuildDB.get_piece(piece.piece_id)["cost"]
 	for item: String in cost:
 		_give(peer_id, item, int(cost[item]) / 2)  # Se devuelve la mitad.
+	var key := str(piece.name)
+	if _storages.has(key):  # Lo que había en la caja queda en el suelo.
+		for i in BuildDB.STORAGE_SLOTS:
+			var stack: Dictionary = _storages[key].take(i)
+			if not stack.is_empty():
+				_spawn_drop(stack["id"], stack["count"], piece.global_position + Vector3(randf_range(-1, 1), 0.2, randf_range(-1, 1)))
+		_storages.erase(key)
+		_storage_viewers.erase(key)
+	for owner in _beds.keys():
+		if _beds[owner] == key:
+			_beds.erase(owner)
 	piece.queue_free()
 
 
@@ -1409,24 +1625,73 @@ func _server_pickup(peer_id: int, drop_name: String) -> void:
 
 # --- Cinemáticas ---------------------------------------------------------------------
 
+## La historia del comienzo (~1 minuto): el naufragio del Albatros.
+## Arma un escenario temporal (barco, tormenta, lluvia) que se borra al terminar.
+func _intro_cinematic() -> Array:
+	var stage := IntroStage.new()
+	stage.setup(self)
+	add_child(stage)
+	var ship := stage.ship
+	var spawn: Vector3 = landmarks["spawn"]
+	var wreck: Vector3 = landmarks["wreck"]
+	var monolith: Vector3 = landmarks["monolith"]
+	var yaw: float = landmarks["ship_yaw"]
+	var fwd := Vector3(-sin(yaw), 0, -cos(yaw))  # Hacia donde navega el barco (la isla).
+	var side := Vector3(fwd.z, 0, -fwd.x)
+	var up := Vector3.UP
+	var to_monolith: Vector3 = monolith - (landmarks["ship_start"] as Vector3)
+	return [
+		{"card": "Hace tres semanas, el Albatros zarpó de Puerto Esperanza con cuarenta pasajeros\ny una carga que nadie quiso nombrar.", "duration": 6.5},
+		{"card": "En la cuarta noche, una tormenta nos arrancó de toda ruta conocida.", "duration": 5.0,
+			"callback": stage.begin_storm.bind(18.0)},
+		{
+			"follow": ship, "from": side * -26 + up * 9 - fwd * 14, "to": side * -18 + up * 6 + fwd * 6,
+			"look_from": up * 4, "look_to": up * 4 + fwd * 6, "shake": 0.25, "duration": 7.0,
+			"text": "Las olas eran más altas que el mástil. La brújula giraba sin control.",
+		},
+		{
+			"follow": ship, "from": side * 4 + up * 6 - fwd * 10, "to": side * 2.5 + up * 5 - fwd * 4,
+			"look_from": up * 5 + fwd * 6, "shake": 0.45, "duration": 5.0,
+			"text": "El capitán juraba que no había tierra en cientos de millas...",
+		},
+		{
+			"follow": ship, "from": up * 14 - fwd * 34, "to": up * 11 - fwd * 24,
+			"look_from": to_monolith.normalized() * 120 + up * 25, "shake": 0.2, "duration": 6.0,
+			"callback": stage.set_storm.bind(0.45),
+			"text": "...hasta que, entre los relámpagos, apareció una isla. En su cima brillaba una luz azul.",
+		},
+		{
+			"follow": ship, "from": side * 16 + up * 4 + fwd * 18, "to": side * 13 + up * 3 + fwd * 14,
+			"look_from": up * 3, "shake": 0.8, "duration": 4.5, "fade_out": true,
+			"callback": stage.crash, "text": "Las rocas partieron el casco en dos.",
+		},
+		{"card": "...", "duration": 3.5, "callback": stage.end_storm},
+		{"card": "Desperté en la arena. Solo se oía el mar.", "duration": 4.5},
+		{
+			"from": wreck + side * 16 + up * 2.5 - fwd * 6, "to": wreck + side * 11 + up * 3.5 + fwd * 4,
+			"look_from": wreck + up * 1.5, "duration": 7.0,
+			"text": "Del Albatros solo quedaban restos. Y nosotros.",
+		},
+		{
+			"from": wreck + up * 6 - fwd * 4, "to": spawn + Vector3(18, 16, 20),
+			"look_from": wreck + fwd * 20, "look_to": spawn + up, "duration": 6.0,
+			"text": "Alguien nos arrastró tierra adentro, hasta un campamento. Las huellas en la arena eran viejas.",
+		},
+		{
+			"from": spawn + Vector3(14, 9, 16), "to": spawn + Vector3(5, 3.5, 7),
+			"look_from": spawn + up, "duration": 5.5,
+			"text": "Sobrevivan. Descubran qué es esta isla. Y nunca salgan solos de noche.",
+		},
+	]
+
+
 func build_cinematic(id: String) -> Array:
 	var spawn: Vector3 = landmarks["spawn"]
 	var monolith: Vector3 = landmarks["monolith"]
 	var crystal := monolith + Vector3(0, 8, 0)
 	match id:
 		"intro":
-			return [
-				{
-					"from": Vector3(-280, 130, 280), "to": Vector3(60, 110, 300),
-					"look_from": Vector3(0, 0, 0), "look_to": Vector3(0, 10, 0),
-					"duration": 7.0, "text": "Una isla olvidada emerge entre la niebla...",
-				},
-				{
-					"from": spawn + Vector3(14, 9, 16), "to": spawn + Vector3(5, 3.5, 7),
-					"look_from": spawn + Vector3(0, 1, 0),
-					"duration": 4.5, "text": "Juntos, tendrán que sobrevivir a sus noches y descubrir sus secretos.",
-				},
-			]
+			return _intro_cinematic()
 		"reveal_monolith":
 			return [
 				{

@@ -12,6 +12,8 @@ extends Node3D
 
 const HIP_HEIGHT := 0.92
 
+signal step  ## Cada vez que un pie toca el suelo (para el sonido de pasos).
+
 # --- Estado de animación (lo actualiza el dueño cada frame) ---
 var move_speed := 0.0  ## Velocidad horizontal en m/s.
 var grounded := true
@@ -146,7 +148,10 @@ func _process(delta: float) -> void:
 	var run := clampf((speed - 5.5) / 2.5, 0.0, 1.0)
 	var stride := lerpf(1.1, 1.9, run)
 	if speed > 0.05:
+		var previous_half := int(_phase / PI)
 		_phase = fmod(_phase + delta * speed / stride * PI, TAU)
+		if int(_phase / PI) != previous_half and grounded and speed > 1.0:
+			step.emit()
 
 	_air = move_toward(_air, 0.0 if grounded else 1.0, delta * 7.0)
 	if grounded and not _was_grounded:

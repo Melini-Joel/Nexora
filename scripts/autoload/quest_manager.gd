@@ -285,6 +285,7 @@ func _quest_ready(id: String) -> void:
 @rpc("authority", "call_local", "reliable")
 func _quest_completed(id: String) -> void:
 	var quest := QuestDB.get_quest(id)
+	Sound.play("quest_complete")
 	Game.notify.emit("Misión completada: %s" % quest["title"])
 	var rewards: Dictionary = quest.get("rewards", {})
 	if not rewards.is_empty():

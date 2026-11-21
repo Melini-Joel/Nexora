@@ -14,6 +14,16 @@ func _ready() -> void:
 	_flame = get_node_or_null("Flame")
 	_light = get_node_or_null("FireLight")
 	_time = randf() * 10.0
+	# Fuego que crepita (fogatas y horno).
+	if station_type in ["campfire", "furnace"]:
+		var crackle := AudioStreamPlayer3D.new()
+		crackle.stream = Sound.get_stream("amb_fire")
+		crackle.bus = "SFX"
+		crackle.unit_size = 3.0
+		crackle.max_distance = 22.0
+		crackle.volume_db = -4.0
+		crackle.autoplay = true
+		add_child(crackle)
 
 
 func get_interact_text() -> String:

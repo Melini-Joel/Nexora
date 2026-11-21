@@ -28,6 +28,8 @@ func get_interact_text() -> String:
 
 
 func set_depleted(value: bool) -> void:
+	if value and not depleted and is_inside_tree():
+		Sound.play(_hit_sound(), global_position + Vector3.UP, 3.0)
 	depleted = value
 	visible = not value
 	collision_layer = 0 if value else 1
@@ -40,7 +42,17 @@ func set_depleted(value: bool) -> void:
 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+func _hit_sound() -> String:
+	match resource_type:
+		"wood":
+			return "chop"
+		"stone", "metal_ore":
+			return "pick"
+	return "pluck"
+
+
 func play_hit() -> void:
+	Sound.play(_hit_sound(), global_position + Vector3.UP)
 	if visual == null:
 		return
 	var tween := create_tween()

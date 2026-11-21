@@ -12,9 +12,10 @@ const CAPACITY_KG := 40.0  ## Peso a partir del cual quedás sobrecargado.
 var slots: Array = []
 
 
-func _init() -> void:
-	slots.resize(SIZE)
-	for i in SIZE:
+## size: 30 para el jugador (barra rápida + mochila); otro número para cajas de almacenamiento.
+func _init(size: int = SIZE) -> void:
+	slots.resize(size)
+	for i in size:
 		slots[i] = {}
 
 
@@ -57,7 +58,7 @@ static func speed_multiplier_for(load_ratio: float) -> float:
 
 
 func is_valid(index: int) -> bool:
-	return index >= 0 and index < SIZE
+	return index >= 0 and index < slots.size()
 
 
 func get_slot(index: int) -> Dictionary:
@@ -76,7 +77,7 @@ func to_array() -> Array:
 
 
 func load_from(data: Array) -> void:
-	for i in mini(data.size(), SIZE):
+	for i in mini(data.size(), slots.size()):
 		slots[i] = data[i].duplicate()
 
 
@@ -86,7 +87,7 @@ func add(id: String, amount: int) -> int:
 		return amount
 	var stack := ItemDB.stack_size(id)
 	# 1) Completar pilas existentes.
-	for i in SIZE:
+	for i in slots.size():
 		var slot: Dictionary = slots[i]
 		if slot.get("id", "") == id and slot["count"] < stack:
 			var n := mini(amount, stack - slot["count"])
@@ -106,6 +107,8 @@ func add(id: String, amount: int) -> int:
 
 
 func _empty_slot_order(id: String) -> Array:
+	if slots.size() != SIZE:
+		return range(slots.size())  # Caja de almacenamiento: en orden.
 	var hotbar := range(HOTBAR_SIZE)
 	var main := range(HOTBAR_SIZE, SIZE)
 	return hotbar + main if ItemDB.tool_type(id) != "" else main + hotbar
@@ -141,7 +144,8 @@ func split(index: int) -> bool:
 	var slot := get_slot(index)
 	if slot.is_empty() or slot["count"] < 2:
 		return false
-	for i in range(HOTBAR_SIZE, SIZE) + range(HOTBAR_SIZE):
+	var order: Array = range(HOTBAR_SIZE, SIZE) + range(HOTBAR_SIZE) if slots.size() == SIZE else range(slots.size())
+	for i in order:
 		if slots[i].is_empty():
 			var half: int = slot["count"] / 2
 			slot["count"] -= half
@@ -192,7 +196,7 @@ func has_items(items: Dictionary) -> bool:
 func remove(id: String, amount: int) -> bool:
 	if count(id) < amount:
 		return false
-	var order: Array = range(SIZE - 1, -1, -1)
+	var order: Array = range(slots.size() - 1, -1, -1)
 	for i in order:
 		var slot: Dictionary = slots[i]
 		if slot.get("id", "") != id:

@@ -12,10 +12,12 @@ const WOOD := Color(0.56, 0.39, 0.22)
 const STONE := Color(0.58, 0.57, 0.55)
 
 var piece_id := ""
+var owner_name := ""  ## Quién la construyó (las camas son personales).
 var door_open := false:
 	set(value):
 		door_open = value
 		if _door:
+			Sound.play("door", global_position + Vector3.UP)
 			create_tween().tween_property(_door, "rotation:y", -1.6 if value else 0.0, 0.4) \
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
@@ -31,6 +33,20 @@ func _ready() -> void:
 	var kind: String = data.get("kind", "foundation")
 	if kind == "campfire":
 		add_child(PropFactory.make_campfire())
+	elif kind in ["storage", "bed"]:
+		PropFactory._add_mesh(self, piece_mesh(piece_id), Vector3.ZERO)
+		for box in collision_boxes(kind):
+			PropFactory._box_collision(self, box[0], box[1])
+		if kind == "bed":
+			var label := Label3D.new()
+			label.text = "Cama de %s" % owner_name
+			label.position = Vector3(0, 1.1, 0)
+			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			label.font_size = 28
+			label.outline_size = 8
+			label.pixel_size = 0.005
+			label.modulate = Color(1, 1, 1, 0.8)
+			add_child(label)
 	else:
 		PropFactory._add_mesh(self, piece_mesh(piece_id), Vector3.ZERO)
 		for box in collision_boxes(kind):
@@ -39,6 +55,8 @@ func _ready() -> void:
 		_build_door(data)
 	if _world:
 		_world.register_piece(self)
+		if _world.generated and Time.get_ticks_msec() - _world.generated_at_ms > 4000:
+			Sound.play("build", global_position + Vector3.UP)
 
 
 func _exit_tree() -> void:
@@ -61,8 +79,15 @@ func floor_height() -> float:
 
 
 func get_interact_text() -> String:
-	if kind() == "doorway":
-		return "Cerrar puerta" if door_open else "Abrir puerta"
+	match kind():
+		"doorway":
+			return "Cerrar puerta" if door_open else "Abrir puerta"
+		"storage":
+			return "Abrir caja"
+		"bed":
+			if owner_name == Network.player_name:
+				return "Tu cama: reaparecés acá al morir"
+			return "Dormir acá (reaparecer en esta cama)"
 	return ""
 
 
@@ -100,6 +125,10 @@ static func collision_boxes(kind: String) -> Array:
 			]
 		"roof":
 			return [[Vector3(g, 0.25, g), Vector3(0, 0.125, 0)]]
+		"storage":
+			return [[Vector3(1.3, 0.8, 0.8), Vector3(0, 0.4, 0)]]
+		"bed":
+			return [[Vector3(1.1, 0.5, 2.1), Vector3(0, 0.25, 0)]]
 	return []
 
 
@@ -131,6 +160,18 @@ static func piece_mesh(id: String) -> Mesh:
 					base.darkened(0.06 * (i % 3))])
 		"campfire":
 			parts.append([PropFactory.cylinder(0.9, 0.9, 0.3, 8), PropFactory._at(Vector3(0, 0.15, 0)), Color(0.5, 0.5, 0.5)])
+		"storage":
+			parts.append([PropFactory.box(Vector3(1.3, 0.7, 0.8)), PropFactory._at(Vector3(0, 0.35, 0)), WOOD.darkened(0.1)])
+			parts.append([PropFactory.box(Vector3(1.34, 0.12, 0.84)), PropFactory._at(Vector3(0, 0.74, 0)), WOOD.lightened(0.05)])
+			for x in [-0.5, 0.5]:
+				parts.append([PropFactory.box(Vector3(0.08, 0.82, 0.84)), PropFactory._at(Vector3(x, 0.4, 0)), Color(0.32, 0.3, 0.28)])
+			parts.append([PropFactory.box(Vector3(0.14, 0.16, 0.05)), PropFactory._at(Vector3(0, 0.6, -0.42)), Color(0.85, 0.7, 0.3)])
+		"bed":
+			parts.append([PropFactory.box(Vector3(1.1, 0.3, 2.1)), PropFactory._at(Vector3(0, 0.15, 0)), WOOD])
+			parts.append([PropFactory.box(Vector3(1.0, 0.16, 1.95)), PropFactory._at(Vector3(0, 0.38, 0)), Color(0.88, 0.85, 0.78)])
+			parts.append([PropFactory.box(Vector3(0.6, 0.12, 0.35)), PropFactory._at(Vector3(0, 0.52, -0.75)), Color(0.95, 0.95, 0.92)])
+			parts.append([PropFactory.box(Vector3(1.04, 0.06, 1.2)), PropFactory._at(Vector3(0, 0.48, 0.35)), Color(0.35, 0.5, 0.7)])
+			parts.append([PropFactory.box(Vector3(1.1, 0.7, 0.1)), PropFactory._at(Vector3(0, 0.35, -1.05)), WOOD.darkened(0.15)])
 	var mesh := PropFactory.combine(parts)
 	_mesh_cache[id] = mesh
 	return mesh

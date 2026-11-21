@@ -5,6 +5,68 @@ extends CanvasLayer
 const InventoryUI := preload("res://scripts/ui/inventory_ui.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
 const DialogUI := preload("res://scripts/ui/dialog_ui.gd")
+const MapUI := preload("res://scripts/ui/map_ui.gd")
+
+
+## Brújula: muestra hacia dónde mirás (N, NE, E...) y la dirección del campamento,
+## de tu cama y del objetivo de misión.
+class Compass extends Control:
+	const SPAN := PI * 0.6  ## Ángulo visible de punta a punta.
+	const POINTS := [["N", 0.0], ["NE", 0.25], ["E", 0.5], ["SE", 0.75], ["S", 1.0], ["SO", 1.25], ["O", 1.5], ["NO", 1.75]]
+
+	func _process(_delta: float) -> void:
+		queue_redraw()
+
+	func _heading() -> float:
+		var camera := get_viewport().get_camera_3d()
+		if camera == null:
+			return 0.0
+		var forward := -camera.global_transform.basis.z
+		return atan2(forward.x, -forward.z)
+
+	func _draw() -> void:
+		var player := Game.local_player
+		if player == null:
+			return
+		var font := ThemeDB.fallback_font
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.06, 0.08, 0.1, 0.55))
+		var heading := _heading()
+		for point in POINTS:
+			var x := _x_for(point[1] * PI, heading)
+			if x >= 0.0:
+				var main: bool = point[0].length() == 1
+				draw_string(font, Vector2(x - (6 if main else 9), size.y - 7), point[0], HORIZONTAL_ALIGNMENT_LEFT, -1,
+					16 if main else 12, Color(1, 0.86, 0.6) if point[0] == "N" else Color(1, 1, 1, 0.85 if main else 0.5))
+		for i in 24:
+			var x := _x_for(i * TAU / 24.0, heading)
+			if x >= 0.0:
+				draw_line(Vector2(x, 0), Vector2(x, 5), Color(1, 1, 1, 0.35), 1.0)
+		var world := get_tree().get_first_node_in_group("world")
+		if world == null:
+			return
+		var markers: Array = [[world.landmarks.get("spawn", Vector3.INF), Color(1, 0.85, 0.45)]]
+		for piece in world.pieces_root.get_children():
+			if piece is BuildPiece and piece.kind() == "bed" and piece.owner_name == Network.player_name:
+				markers.append([piece.global_position, Color(0.95, 0.5, 0.4)])
+		for id in QuestManager.active_quests():
+			for objective in QuestDB.get_quest(id)["objectives"]:
+				if objective["type"] == "reach":
+					markers.append([world.landmarks.get(objective["target"], Vector3.INF), Color(1, 0.8, 0.2)])
+		for marker in markers:
+			var target: Vector3 = marker[0]
+			if target == Vector3.INF:
+				continue
+			var to: Vector3 = target - (player.global_position as Vector3)
+			var x := _x_for(atan2(to.x, -to.z), heading)
+			if x >= 0.0:
+				draw_colored_polygon(PackedVector2Array([Vector2(x, size.y - 1), Vector2(x - 5, size.y - 9), Vector2(x + 5, size.y - 9)]), marker[1])
+
+	## Posición horizontal de un rumbo en la brújula (-1 si queda fuera de vista).
+	func _x_for(bearing: float, heading: float) -> float:
+		var delta := wrapf(bearing - heading, -PI, PI)
+		if absf(delta) > SPAN / 2.0:
+			return -1.0
+		return size.x / 2.0 + delta / SPAN * size.x
 
 var _root: Control
 var _quest_objectives: VBoxContainer
@@ -60,6 +122,7 @@ func _ready() -> void:
 
 	_root.visible = not Cinematics.playing
 	add_child(InventoryUI.new())
+	add_child(MapUI.new())
 	_last_totals = _item_totals()
 	_refresh_quest()
 	_refresh_players()
@@ -141,7 +204,7 @@ func _build_bottom() -> void:
 	_notifications.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_notifications)
 
-	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click usar/atacar · E interactuar\n1-6 / rueda: barra rápida · R pieza (martillo) · V cámara · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
+	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click usar/atacar · E interactuar\n1-6 / rueda: barra rápida · R pieza (martillo) · M mapa · V cámara · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.offset_left = 20
@@ -317,6 +380,15 @@ func _build_clock() -> void:
 	_biome = UIStyle.label("", 14, UIStyle.TEXT_DIM)
 	_biome.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_biome)
+	var compass := Compass.new()
+	compass.anchor_left = 0.5
+	compass.anchor_right = 0.5
+	compass.offset_left = -200
+	compass.offset_right = 200
+	compass.offset_top = 92
+	compass.offset_bottom = 122
+	compass.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(compass)
 
 
 func _build_effects() -> void:
@@ -341,6 +413,7 @@ func _build_effects() -> void:
 
 
 func _on_player_hit(_amount: float) -> void:
+	Sound.play("hurt")
 	var tween := create_tween()
 	tween.tween_property(_damage_flash, "color:a", 0.35, 0.05)
 	tween.tween_property(_damage_flash, "color:a", 0.0, 0.4)
@@ -355,6 +428,7 @@ func _update_world_info() -> void:
 	var night := day_night.is_night()
 	if night and not _was_night:
 		show_notification("Cae la noche... las sombras salen a cazar. Prendé una antorcha.")
+		Sound.play("night_sting", Vector3.INF, -3.0)
 	elif not night and _was_night:
 		show_notification("Amanece. Las sombras se queman con la luz del sol.")
 	_was_night = night
@@ -425,6 +499,7 @@ func show_notification(text: String) -> void:
 
 
 func _show_pickup(text: String, color: Color) -> void:
+	Sound.play("pickup", Vector3.INF, -6.0)
 	var label := UIStyle.label(text, 18, color.lightened(0.3))
 	_pickup_box.add_child(label)
 	var tween := label.create_tween()
