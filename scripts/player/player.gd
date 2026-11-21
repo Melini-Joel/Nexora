@@ -6,7 +6,6 @@ const WALK_SPEED := 5.0
 const SPRINT_SPEED := 8.5
 const ACCELERATION := 12.0
 const JUMP_VELOCITY := 5.5
-const MOUSE_SENSITIVITY := 0.0025
 const INTERACT_DISTANCE := 3.5
 const GATHER_COOLDOWN := 0.5
 const HAND_REST := -0.6
@@ -168,9 +167,7 @@ func _build_camera() -> void:
 	add_child(_camera_pivot)
 
 	_spring_arm = SpringArm3D.new()
-	_spring_arm.spring_length = 4.5
 	_spring_arm.margin = 0.2
-	_spring_arm.position = Vector3(0.5, 0, 0)  # Cámara apenas sobre el hombro.
 	_spring_arm.rotation.x = -0.3
 	var shape := SphereShape3D.new()
 	shape.radius = 0.25
@@ -179,9 +176,18 @@ func _build_camera() -> void:
 	_camera_pivot.add_child(_spring_arm)
 
 	camera = Camera3D.new()
-	camera.fov = 70.0
 	_spring_arm.add_child(camera)
 	camera.make_current()
+	_apply_camera_settings()
+	Settings.changed.connect(_apply_camera_settings)
+
+
+## Aplica las opciones de cámara (distancia, altura, hombro, FOV) del menú de Opciones.
+func _apply_camera_settings() -> void:
+	_camera_pivot.position.y = Settings.get_value("camera_height")
+	_spring_arm.spring_length = Settings.get_value("camera_distance")
+	_spring_arm.position.x = Settings.get_value("camera_shoulder")
+	camera.fov = Settings.get_value("fov")
 
 
 # --- Entrada ---------------------------------------------------------------------------
@@ -202,6 +208,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		Game.set_inventory_open(not Game.inventory_open)
 		get_viewport().set_input_as_handled()
 		return
+	if event.is_action_pressed("camera_toggle"):
+		Game.notify.emit("Cámara: %s" % Settings.cycle_camera_distance())
+		return
 	for i in Inventory.HOTBAR_SIZE:
 		if event.is_action_pressed("hotbar_%d" % (i + 1)):
 			Game.select_slot(i)
@@ -209,8 +218,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if Game.inventory_open:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_camera_pivot.rotation.y -= event.relative.x * MOUSE_SENSITIVITY
-		_spring_arm.rotation.x = clampf(_spring_arm.rotation.x - event.relative.y * MOUSE_SENSITIVITY, -1.2, 0.45)
+		var sensitivity := Settings.mouse_sensitivity()
+		var vertical: float = event.relative.y * (-1.0 if Settings.get_value("invert_y") else 1.0)
+		_camera_pivot.rotation.y -= event.relative.x * sensitivity
+		_spring_arm.rotation.x = clampf(_spring_arm.rotation.x - vertical * sensitivity, -1.2, 0.45)
 	elif event is InputEventMouseButton and event.pressed:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

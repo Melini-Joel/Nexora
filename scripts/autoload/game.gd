@@ -118,6 +118,7 @@ func _setup_input() -> void:
 	_add_keys("interact", [KEY_E])
 	_add_mouse_button("attack", MOUSE_BUTTON_LEFT)
 	_add_keys("inventory", [KEY_TAB, KEY_I])
+	_add_keys("camera_toggle", [KEY_V])
 	_add_keys("pause", [KEY_ESCAPE])
 	_add_keys("skip_cinematic", [KEY_ESCAPE, KEY_ENTER, KEY_SPACE])
 	for i in Inventory.HOTBAR_SIZE:

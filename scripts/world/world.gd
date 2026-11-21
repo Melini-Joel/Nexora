@@ -32,6 +32,8 @@ var _drop_counter := 0
 var _crystal: Node3D
 var _crystal_base_y := 0.0
 var _fire_light: OmniLight3D
+var _sun: DirectionalLight3D
+var _environment: Environment
 var _time := 0.0
 
 @onready var players_root: Node3D = $Players
@@ -110,8 +112,19 @@ func _build_environment() -> void:
 	sun.light_color = Color(1.0, 0.95, 0.85)
 	sun.light_energy = 1.1
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 90.0
 	add_child(sun)
+	_sun = sun
+	_environment = env
+	_apply_graphics()
+	Settings.changed.connect(_apply_graphics)
+
+
+## Calidad gráfica elegida en Opciones (sombras y brillo).
+func _apply_graphics() -> void:
+	var quality: String = Settings.get_value("quality")
+	_sun.shadow_enabled = quality != "low"
+	_sun.directional_shadow_max_distance = 140.0 if quality == "high" else 70.0
+	_environment.glow_enabled = quality != "low"
 
 
 func _build_water() -> void:

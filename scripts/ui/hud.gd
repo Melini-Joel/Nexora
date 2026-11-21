@@ -3,6 +3,7 @@ extends CanvasLayer
 ## El inventario y la barra rápida están en inventory_ui.gd.
 
 const InventoryUI := preload("res://scripts/ui/inventory_ui.gd")
+const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
 
 var _root: Control
 var _quest_title: Label
@@ -15,6 +16,8 @@ var _notifications: VBoxContainer
 var _pause_overlay: Control
 var _last_totals: Dictionary = {}
 var _crosshair: Label
+var _fps_label: Label
+var _pause_box: Control
 
 
 func _ready() -> void:
@@ -55,6 +58,9 @@ func _build_players_panel() -> void:
 	_root.add_child(panel)
 	_players_label = UIStyle.label("", 15, UIStyle.TEXT_DIM)
 	panel.add_child(_players_label)
+	_fps_label = UIStyle.label("", 14, UIStyle.SUCCESS)
+	_fps_label.position = Vector2(24, 64)
+	_root.add_child(_fps_label)
 
 
 func _build_quest_panel() -> void:
@@ -125,7 +131,7 @@ func _build_bottom() -> void:
 	_notifications.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_notifications)
 
-	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click golpear · E recoger\n1-6 / rueda: barra rápida · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
+	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click golpear · E recoger\n1-6 / rueda: barra rápida · V cámara · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.offset_left = 20
@@ -149,6 +155,7 @@ func _build_pause_menu() -> void:
 	var panel := UIStyle.panel(Color(0.05, 0.07, 0.09, 0.92), 24)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	center.add_child(panel)
+	_pause_box = panel
 	var box := VBoxContainer.new()
 	box.custom_minimum_size = Vector2(320, 0)
 	box.add_theme_constant_override("separation", 10)
@@ -162,6 +169,9 @@ func _build_pause_menu() -> void:
 	var resume := UIStyle.button("Continuar")
 	resume.pressed.connect(func(): Game.set_pause_open(false))
 	box.add_child(resume)
+	var options := UIStyle.button("Opciones")
+	options.pressed.connect(_open_settings)
+	box.add_child(options)
 	var leave := UIStyle.button("Salir al menú principal")
 	leave.pressed.connect(func(): Game.quit_to_menu_requested.emit())
 	box.add_child(leave)
@@ -208,6 +218,19 @@ func _refresh_quest() -> void:
 		else:
 			text = "• %s%s" % [objective["text"], " (hecho)" if done else ""]
 		_quest_objectives.add_child(UIStyle.label(text, 17, UIStyle.SUCCESS if done else UIStyle.TEXT))
+
+
+func _process(_delta: float) -> void:
+	_fps_label.visible = Settings.get_value("show_fps")
+	if _fps_label.visible:
+		_fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
+
+
+func _open_settings() -> void:
+	_pause_box.visible = false
+	var menu := SettingsMenu.new()
+	menu.closed.connect(func(): _pause_box.visible = true)
+	add_child(menu)
 
 
 func _refresh_players() -> void:

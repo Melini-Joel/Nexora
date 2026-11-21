@@ -4,6 +4,8 @@ extends CanvasLayer
 signal host_pressed(player_name: String)
 signal join_pressed(player_name: String, address: String)
 
+const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
+
 var _name_edit: LineEdit
 var _address_edit: LineEdit
 var _status: Label
@@ -39,7 +41,7 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 10)
 	panel.add_child(box)
 
-	var title := UIStyle.label("Tierras Compartidas", 42, UIStyle.ACCENT)
+	var title := UIStyle.label("NEXORA", 56, UIStyle.ACCENT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	var subtitle := UIStyle.label("Aventura cooperativa · 2 a %d jugadores" % Network.MAX_PLAYERS, 16, UIStyle.TEXT_DIM)
@@ -70,6 +72,10 @@ func _ready() -> void:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_status)
+
+	var options_button := UIStyle.button("Opciones")
+	options_button.pressed.connect(func(): add_child(SettingsMenu.new()))
+	box.add_child(options_button)
 
 	var quit_button := UIStyle.button("Salir")
 	quit_button.pressed.connect(func(): get_tree().quit())

@@ -1,4 +1,4 @@
-# Tierras Compartidas
+# NEXORA
 
 RPG cooperativo de mundo abierto en 3D (2 a 6 jugadores) hecho con **Godot 4.3+** y **GDScript**.
 Estilo low-poly: liviano para cualquier PC, pero con iluminación, sombras, niebla y brillo.
@@ -10,6 +10,15 @@ Estilo low-poly: liviano para cualquier PC, pero con iluminación, sombras, nieb
 1. Descargá Godot 4.3 o superior (versión estándar, **no** la .NET): https://godotengine.org/download
 2. Abrí Godot → **Importar** → elegí el archivo `project.godot` de esta carpeta.
 3. Apretá **F5** para jugar → **Crear partida**.
+
+## Opciones (menú principal o Esc → Opciones)
+
+- **Pantalla:** modo (ventana, maximizada o pantalla completa), resolución, tamaño de la interfaz, VSync y contador de FPS.
+- **Cámara:** distancia, altura, hombro (izquierda/centro/derecha), campo de visión, sensibilidad del mouse e invertir eje Y.
+- **Gráficos:** calidad baja, media o alta. Baja es ideal para notebooks.
+
+Las opciones se guardan solas y se mantienen la próxima vez que abras el juego.
+Por defecto el juego arranca en **ventana maximizada**, así entra en cualquier pantalla.
 
 ## Probar el cooperativo en una sola PC
 
@@ -42,6 +51,7 @@ godot --path . -- --join=127.0.0.1 --name=Beto
 | E | Recoger bolsas del suelo |
 | 1-6 / rueda del mouse | Elegir objeto de la barra rápida |
 | Tab / I | Abrir inventario |
+| V | Cámara cerca / normal / lejos |
 | Esc | Cerrar inventario · menú de pausa · saltear cinemática |
 
 ### Inventario
@@ -77,6 +87,7 @@ scenes/
 scripts/
   main.gd              Menú → mundo, argumentos de línea de comandos
   autoload/
+    settings.gd        Opciones del jugador (se guardan en user://settings.cfg)
     game.gd            Estado local: inventario, barra rápida, peso, controles, pausa
     network.gd         Host / unirse, registro de jugadores (ENet)
     quest_manager.gd   Misiones cooperativas (datos + lógica del servidor)
@@ -95,6 +106,7 @@ scripts/
     inventory_ui.gd    Barra rápida, ventana de inventario, indicador de carga
     item_slot.gd       Casillero con arrastrar y soltar
     item_icon.gd       Íconos dibujados por código
+    settings_menu.gd   Menú de opciones
 ```
 
 ### Cómo agregar cosas
