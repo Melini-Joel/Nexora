@@ -27,7 +27,7 @@ func _ready() -> void:
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
 
-func host_game(port: int = DEFAULT_PORT, solo: bool = false) -> Error:
+func host_game(port: int = DEFAULT_PORT, solo: bool = false, seed_value: int = -1) -> Error:
 	# En modo solo el servidor escucha solo en esta PC y no acepta a nadie más
 	# (así no aparece el aviso del firewall). Si el puerto está ocupado, prueba los siguientes.
 	var err := ERR_CANT_CREATE
@@ -43,7 +43,7 @@ func host_game(port: int = DEFAULT_PORT, solo: bool = false) -> Error:
 			multiplayer.multiplayer_peer = peer
 			is_solo = solo
 			randomize()
-			world_seed = randi()
+			world_seed = seed_value if seed_value >= 0 else randi()
 			return OK
 	return err
 

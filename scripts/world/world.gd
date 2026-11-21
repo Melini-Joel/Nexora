@@ -49,7 +49,9 @@ var _walls: Dictionary = {}  ## clave de borde -> Array de alturas de piso
 var _respawn_timers: Dictionary = {}
 var _chest_timers: Dictionary = {}
 var _inventories: Dictionary = {}  ## peer_id -> Inventory
-var _saved_inventories: Dictionary = {}  ## nombre -> Array (para volver a entrar sin perder todo)
+## Jugadores que no están conectados (salieron o vienen de una partida guardada):
+## nombre -> {"inventory": Array, "health", "hunger", "position": Vector3}
+var _saved_players: Dictionary = {}
 var _stats: Dictionary = {}  ## peer_id -> {"health", "hunger"}
 var _last_gather_ms: Dictionary = {}
 var _last_attack_ms: Dictionary = {}
@@ -442,22 +444,29 @@ func _on_player_joined(peer_id: int) -> void:
 	if players_root.has_node(str(peer_id)):
 		return
 	var player_name: String = Network.players[peer_id]["name"]
+	# Si ya había jugado en este mundo, recupera inventario, vida, hambre y posición.
+	var saved: Dictionary = _saved_players.get(player_name, {})
+	_saved_players.erase(player_name)
 	var player := PLAYER_SCENE.instantiate()
 	player.name = str(peer_id)
 	player.player_name = player_name
-	player.position = get_spawn_point(peer_id)
+	player.position = saved.get("position", get_spawn_point(peer_id))
 	player.sync_pos = player.position
 	players_root.add_child(player, true)
 
 	var inventory := Inventory.new()
-	if _saved_inventories.has(player_name):
-		inventory.load_from(_saved_inventories[player_name])
-		_saved_inventories.erase(player_name)
+	if saved.has("inventory"):
+		inventory.load_from(saved["inventory"])
 	else:
 		for entry in STARTER_KIT:
 			inventory.add(entry[0], entry[1])
 	_inventories[peer_id] = inventory
-	_stats[peer_id] = {"health": 100.0, "hunger": 80.0}
+	_stats[peer_id] = {"health": float(saved.get("health", 100.0)), "hunger": float(saved.get("hunger", 80.0))}
+	# Sus mascotas lo vuelven a reconocer.
+	for creature in creatures_root.get_children():
+		if creature is Creature and creature.tamed_owner == player_name:
+			creature.owner_peer = peer_id
+			creature.follow_owner = true
 	_send_inventory(peer_id)
 	_send_stats(peer_id)
 
@@ -465,13 +474,8 @@ func _on_player_joined(peer_id: int) -> void:
 func _on_player_left(peer_id: int) -> void:
 	var player := players_root.get_node_or_null(str(peer_id))
 	if player:
-		var inventory: Inventory = _inventories.get(peer_id)
-		if inventory:
-			for job in _craft_queues.get(peer_id, []):
-				var ingredients: Dictionary = RecipeDB.get_recipe(job["recipe"])["ingredients"]
-				for item: String in ingredients:
-					inventory.add(item, int(ingredients[item]) * int(job["remaining"]))
-			_saved_inventories[player.player_name] = inventory.to_array()
+		if _inventories.has(peer_id):
+			_saved_players[player.player_name] = _player_snapshot(peer_id)
 		player.queue_free()
 	for creature in creatures_root.get_children():
 		if creature is Creature and creature.owner_peer == peer_id:
@@ -480,6 +484,85 @@ func _on_player_left(peer_id: int) -> void:
 	_craft_queues.erase(peer_id)
 	_stats.erase(peer_id)
 	_last_gather_ms.erase(peer_id)
+
+
+## Lo que se guarda de un jugador conectado (lo que estaba fabricando vuelve al inventario).
+func _player_snapshot(peer_id: int) -> Dictionary:
+	var inventory := Inventory.new()
+	inventory.load_from(_inventories[peer_id].to_array())
+	for job in _craft_queues.get(peer_id, []):
+		var ingredients: Dictionary = RecipeDB.get_recipe(job["recipe"])["ingredients"]
+		for item: String in ingredients:
+			inventory.add(item, int(ingredients[item]) * int(job["remaining"]))
+	var player := _player_node(peer_id)
+	var stats: Dictionary = _stats.get(peer_id, {"health": 100.0, "hunger": 80.0})
+	return {
+		"inventory": inventory.to_array(), "health": stats["health"], "hunger": stats["hunger"],
+		"position": player.sync_pos if player else get_spawn_point(peer_id),
+	}
+
+
+# --- Guardado de partida (servidor) ------------------------------------------------------
+
+## Todo lo necesario para volver a armar este mundo (ver SaveManager).
+func build_save() -> Dictionary:
+	var players := _saved_players.duplicate(true)
+	for peer_id in _inventories.keys():
+		players[Network.players.get(peer_id, {}).get("name", str(peer_id))] = _player_snapshot(peer_id)
+	var pieces: Array = []
+	for piece in pieces_root.get_children():
+		if piece is BuildPiece and not piece.is_queued_for_deletion():
+			pieces.append({"id": piece.piece_id, "position": piece.position, "rotation": piece.rotation.y, "door_open": piece.door_open})
+	var drops: Array = []
+	for drop in drops_root.get_children():
+		if not drop.is_queued_for_deletion():
+			drops.append({"item": drop.item_id, "count": drop.count, "position": drop.position})
+	var pets: Array = []
+	for creature in creatures_root.get_children():
+		if creature is Creature and creature.tamed_owner != "" and not creature.dead:
+			pets.append({"species": creature.species, "position": creature.global_position, "owner": creature.tamed_owner,
+				"follow": creature.follow_owner, "health": creature.health})
+	return {
+		"seed": Network.world_seed, "time": day_night.time, "day": day_night.day,
+		"blueprints": known_blueprints.duplicate(), "quests": QuestManager.export_state(),
+		"players": players, "pieces": pieces, "drops": drops, "pets": pets,
+		"depleted": _respawn_timers.duplicate(), "chests": _chest_timers.duplicate(),
+	}
+
+
+## Rearma un mundo guardado (se llama justo después de generar la isla con la misma semilla).
+func load_save(data: Dictionary) -> void:
+	day_night.set_time(data.get("time", 0.3), data.get("day", 1))
+	known_blueprints = data.get("blueprints", []).duplicate()
+	_saved_players = data.get("players", {}).duplicate(true)
+	_respawn_timers = data.get("depleted", {}).duplicate()
+	for node_name in _respawn_timers:
+		_set_node_state(node_name, true)
+	_chest_timers = data.get("chests", {}).duplicate()
+	for chest_name in _chest_timers:
+		_set_chest_state(chest_name, true)
+	for entry in data.get("pieces", []):
+		_piece_counter += 1
+		var piece := PIECE_SCENE.instantiate()
+		piece.name = "P_%d" % _piece_counter
+		piece.piece_id = entry["id"]
+		piece.position = entry["position"]
+		piece.rotation = Vector3(0, entry["rotation"], 0)
+		piece.door_open = entry.get("door_open", false)
+		pieces_root.add_child(piece, true)
+	for entry in data.get("drops", []):
+		_spawn_drop(entry["item"], int(entry["count"]), entry["position"])
+	for entry in data.get("pets", []):
+		_creature_counter += 1
+		var creature := CREATURE_SCENE.instantiate()
+		creature.name = "C_%d" % _creature_counter
+		creature.species = entry["species"]
+		creature.position = entry["position"] + Vector3(0, 0.5, 0)
+		creature.tamed_owner = entry["owner"]
+		creature.follow_owner = false  # Espera a que su dueño se conecte.
+		creature.tame_progress = int(CreatureDB.get_species(entry["species"]).get("tame", {}).get("amount", 0))
+		creatures_root.add_child(creature, true)
+		creature.health = entry.get("health", creature.health)
 
 
 ## Estado que necesita un jugador que entra a una partida ya empezada.

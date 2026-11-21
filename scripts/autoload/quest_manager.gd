@@ -13,6 +13,17 @@ var progress: Dictionary = {}  ## id -> Array con el progreso de cada objetivo
 var _reach_timer := 0.0
 
 
+## Para el guardado de partida.
+func export_state() -> Dictionary:
+	return {"status": status.duplicate(), "progress": progress.duplicate(true)}
+
+
+func load_state(data: Dictionary) -> void:
+	status = data.get("status", {}).duplicate()
+	progress = data.get("progress", {}).duplicate(true)
+	quest_changed.emit()
+
+
 func reset() -> void:
 	status = {}
 	progress = {}

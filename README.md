@@ -13,7 +13,15 @@ Estilo low-poly: liviano para cualquier PC, pero con iluminación, sombras, nieb
 
 1. Descargá Godot 4.3 o superior (versión estándar, **no** la .NET): https://godotengine.org/download
 2. Abrí Godot → **Importar** → elegí el archivo `project.godot` de esta carpeta.
-3. Apretá **F5**. En el menú elegí **Jugar solo** o **Multijugador** (crear partida o unirse por IP).
+3. Apretá **F5**. En el menú elegí **Continuar** (último mundo), **Jugar solo** o **Multijugador** (crear partida o unirse por IP).
+
+## Guardado de partida
+
+- Cada partida es un **mundo** con nombre. Al elegir *Jugar solo* o *Crear partida* aparece la lista de mundos guardados: cargás uno o creás uno nuevo.
+- **Se guarda solo** cada 3 minutos, al salir al menú y al cerrar el juego. También hay un botón **Guardar partida** en la pausa (Esc).
+- Se guarda: la isla, el día y la hora, las construcciones, las bolsas en el suelo, los planos aprendidos, las misiones, las **mascotas** y, por cada jugador (según su **nombre**), su inventario, vida, hambre y posición.
+- **En cooperativo guarda el host.** Si tus amigos vuelven a entrar con el mismo nombre, recuperan sus cosas y sus mascotas.
+- Los archivos están en `%APPDATA%\Godot\app_userdata\NEXORA\saves` (Windows). Copiá esa carpeta si querés hacer una copia de seguridad.
 
 ## Cómo actualizar a una versión nueva (sin borrar ni volver a importar)
 
@@ -153,6 +161,7 @@ scenes/
 scripts/
   main.gd              Menú → mundo, argumentos de línea de comandos
   autoload/
+    save_manager.gd    Guardado y carga de mundos (user://saves)
     settings.gd        Opciones del jugador (se guardan en user://settings.cfg)
     game.gd            Estado local: inventario, barra rápida, peso, controles, pausa
     network.gd         Host / unirse, registro de jugadores (ENet)
@@ -209,7 +218,7 @@ shaders/               Pasto y agua
 4. ~~Inventario por casilleros, peso y herramientas~~ ✅
 5. ~~Fabricación, NPCs con misiones y personajes animados~~ ✅
 6. ~~Biomas, día/noche, supervivencia, combate, animales, domesticación y construcción~~ ✅
-7. **Guardado de partida** (mundo, construcciones, inventarios, mascotas)
+7. ~~Menú con fondo animado, modo solo y guardado de partidas~~ ✅
 8. Mapa (tecla M) y brújula
 9. Cofres de almacenamiento, camas para reaparecer en tu base
 10. Sonido y música

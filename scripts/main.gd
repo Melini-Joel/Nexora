@@ -24,8 +24,7 @@ func _ready() -> void:
 		add_child(_backdrop)
 	menu = MainMenu.new()
 	add_child(menu)
-	menu.solo_pressed.connect(_on_solo_pressed)
-	menu.host_pressed.connect(_on_host_pressed)
+	menu.start_pressed.connect(_start_hosting)
 	menu.join_pressed.connect(_on_join_pressed)
 	Network.joined_world.connect(_on_joined_world)
 	Network.connection_failed.connect(_on_connection_failed)
@@ -35,24 +34,32 @@ func _ready() -> void:
 	_handle_command_line()
 
 
-func _on_solo_pressed(player_name: String) -> void:
-	_start_hosting(player_name, true)
-
-
-func _on_host_pressed(player_name: String) -> void:
-	_start_hosting(player_name, false)
-
-
-func _start_hosting(player_name: String, solo: bool) -> void:
+## Crea la partida (solo o para amigos). slot = mundo guardado a cargar, "" = mundo nuevo.
+## save = false solo para pruebas rápidas desde la línea de comandos (no guarda nada).
+func _start_hosting(player_name: String, solo: bool, slot: String, world_name: String, save: bool = true) -> void:
+	var data := SaveManager.load_data(slot) if slot != "" else {}
+	if slot != "" and data.is_empty():
+		menu.set_status("No se pudo leer ese mundo guardado.", true)
+		return
 	Network.player_name = player_name
-	var err := Network.host_game(Network.DEFAULT_PORT, solo)
+	var err := Network.host_game(Network.DEFAULT_PORT, solo, int(data.get("seed", -1)))
 	if err != OK:
 		menu.set_status("No se pudo crear la partida (¿el puerto %d está en uso?)." % Network.DEFAULT_PORT, true)
 		return
 	QuestManager.reset()
-	_enter_world(Network.world_seed, {})
+	if save:
+		var meta: Dictionary = data.get("meta", {})
+		SaveManager.begin(slot, meta.get("name", world_name), meta.get("play_time", 0.0))
+	_enter_world(Network.world_seed, {}, data.is_empty())
+	if not data.is_empty():
+		world.load_save(data)
+		QuestManager.load_state(data.get("quests", {}))
 	Network.add_host_player()
 	QuestManager.server_start()
+	if save and data.is_empty():
+		SaveManager.save_game()  # El mundo nuevo ya aparece en la lista.
+	elif not data.is_empty():
+		Game.notify.emit("Mundo cargado: %s (día %d)" % [SaveManager.current_name, world.day_night.day])
 
 
 func _on_join_pressed(player_name: String, address: String) -> void:
@@ -74,7 +81,7 @@ func _on_connection_failed(reason: String) -> void:
 	menu.set_status(reason, true)
 
 
-func _enter_world(world_seed: int, state: Dictionary) -> void:
+func _enter_world(world_seed: int, state: Dictionary, play_intro: bool = true) -> void:
 	menu.visible = false
 	if is_instance_valid(_backdrop):
 		remove_child(_backdrop)
@@ -83,7 +90,7 @@ func _enter_world(world_seed: int, state: Dictionary) -> void:
 	world.apply_state(state)
 	hud = Hud.new()
 	add_child(hud)
-	_intro_pending = true
+	_intro_pending = play_intro
 	_try_play_intro()
 
 
@@ -95,6 +102,8 @@ func _try_play_intro() -> void:
 
 
 func _return_to_menu(message: String) -> void:
+	SaveManager.save_game()  # Solo hace algo si sos el host de un mundo guardado.
+	SaveManager.end()
 	Cinematics.stop()
 	Network.leave_game()
 	Game.reset()
@@ -111,8 +120,12 @@ func _handle_command_line() -> void:
 			player_name = arg.trim_prefix("--name=")
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--solo":
-			_on_solo_pressed(player_name if player_name else "Solo")
+			_start_hosting(player_name if player_name else "Solo", true, "", "", false)
 		elif arg == "--host":
-			_on_host_pressed(player_name if player_name else "Host")
+			_start_hosting(player_name if player_name else "Host", false, "", "", false)
+		elif arg.begins_with("--load="):  # Cargar un mundo guardado: --load=<archivo sin .save>
+			_start_hosting(player_name if player_name else "Host", false, arg.trim_prefix("--load="), "")
+		elif arg.begins_with("--world="):  # Mundo nuevo que se guarda: --world=<nombre>
+			_start_hosting(player_name if player_name else "Host", false, "", arg.trim_prefix("--world="))
 		elif arg.begins_with("--join="):
 			_on_join_pressed(player_name if player_name else "Invitado", arg.trim_prefix("--join="))

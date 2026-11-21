@@ -17,6 +17,7 @@ Game="*res://scripts/autoload/game.gd"
 Network="*res://scripts/autoload/network.gd"
 QuestManager="*res://scripts/autoload/quest_manager.gd"
 Cinematics="*res://scripts/autoload/cinematics.gd"
+SaveManager="*res://scripts/autoload/save_manager.gd"
 
 [display]
 

@@ -2,16 +2,21 @@ extends CanvasLayer
 ## Menú principal sobre el fondo animado (menu_backdrop.gd).
 ## Jugar solo · Multijugador (crear partida o unirse) · Opciones · Salir.
 
-signal solo_pressed(player_name: String)
-signal host_pressed(player_name: String)
+## slot = mundo guardado a cargar ("" = mundo nuevo llamado world_name).
+signal start_pressed(player_name: String, solo: bool, slot: String, world_name: String)
 signal join_pressed(player_name: String, address: String)
 
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
-const VERSION := "Prototipo v0.7"
+const VERSION := "Prototipo v0.8"
 const WARM := Color(1.0, 0.86, 0.6)
 
 var _main_box: VBoxContainer
 var _multi_box: VBoxContainer
+var _worlds_box: VBoxContainer
+var _worlds_list: VBoxContainer
+var _world_name_edit: LineEdit
+var _worlds_title: Label
+var _worlds_solo := true
 var _name_edit: LineEdit
 var _address_edit: LineEdit
 var _status: Label
@@ -57,12 +62,24 @@ func _ready() -> void:
 	_main_box = VBoxContainer.new()
 	_main_box.add_theme_constant_override("separation", 4)
 	column.add_child(_main_box)
+	var saves := SaveManager.list_saves()
+	if not saves.is_empty():
+		var last: Dictionary = saves[0]
+		_main_box.add_child(_menu_button("Continuar", _on_continue.bind(last["slot"], last["name"])))
+		var info := _caption("%s  ·  DÍA %d  ·  %s" % [last["name"].to_upper(), last["day"], SaveManager.format_ago(last["last_played"]).to_upper()])
+		info.add_theme_color_override("font_color", Color(1, 0.86, 0.6, 0.6))
+		var info_margin := MarginContainer.new()
+		info_margin.add_theme_constant_override("margin_left", 20)
+		info_margin.add_theme_constant_override("margin_bottom", 8)
+		info_margin.add_child(info)
+		_main_box.add_child(info_margin)
 	_main_box.add_child(_menu_button("Jugar solo", _on_solo))
 	_main_box.add_child(_menu_button("Multijugador", _show_multiplayer))
 	_main_box.add_child(_menu_button("Opciones", func(): add_child(SettingsMenu.new())))
 	_main_box.add_child(_menu_button("Salir", func(): get_tree().quit()))
 
 	_build_multiplayer_box(column)
+	_build_worlds_box(column)
 
 	column.add_child(_spacer(16))
 	_status = UIStyle.label("", 16, Color(1, 1, 1, 0.75))
@@ -145,6 +162,111 @@ func _build_multiplayer_box(column: VBoxContainer) -> void:
 	_multi_box.add_child(_menu_button("Unirse", _on_join))
 	_multi_box.add_child(_spacer(6))
 	_multi_box.add_child(_menu_button("‹  Volver", _show_main))
+
+
+## Lista de mundos guardados + crear uno nuevo.
+func _build_worlds_box(column: VBoxContainer) -> void:
+	_worlds_box = VBoxContainer.new()
+	_worlds_box.add_theme_constant_override("separation", 8)
+	_worlds_box.visible = false
+	column.add_child(_worlds_box)
+	_worlds_title = _caption("ELEGÍ UN MUNDO")
+	_worlds_box.add_child(_worlds_title)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(460, 0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_worlds_box.add_child(scroll)
+	_worlds_list = VBoxContainer.new()
+	_worlds_list.add_theme_constant_override("separation", 2)
+	_worlds_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_worlds_list)
+	_worlds_box.add_child(_spacer(6))
+	_worlds_box.add_child(_caption("O CREÁ UN MUNDO NUEVO"))
+	_world_name_edit = _field("", "Nombre del mundo")
+	_world_name_edit.max_length = 24
+	_worlds_box.add_child(_world_name_edit)
+	_worlds_box.add_child(_menu_button("Crear mundo nuevo", _on_new_world))
+	_worlds_box.add_child(_spacer(6))
+	_worlds_box.add_child(_menu_button("‹  Volver", _back_from_worlds))
+
+
+func _show_worlds(solo: bool) -> void:
+	_worlds_solo = solo
+	_main_box.visible = false
+	_multi_box.visible = false
+	_worlds_box.visible = true
+	_worlds_title.text = "JUGAR SOLO  ·  ELEGÍ UN MUNDO" if solo else "CREAR PARTIDA  ·  ELEGÍ UN MUNDO"
+	if _world_name_edit.text.strip_edges() == "":
+		_world_name_edit.text = "Isla de %s" % _player_name()
+	_refresh_worlds()
+
+
+func _refresh_worlds() -> void:
+	for child in _worlds_list.get_children():
+		child.queue_free()
+	var saves := SaveManager.list_saves()
+	if saves.is_empty():
+		var empty := UIStyle.label("Todavía no hay mundos guardados.", 15, Color(1, 1, 1, 0.5))
+		_worlds_list.add_child(empty)
+	(_worlds_list.get_parent() as Control).custom_minimum_size.y = clampf(saves.size() * 54.0, 30.0, 230.0)
+	for save in saves:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		var load := _menu_button("%s" % save["name"], _on_load_world.bind(save["slot"], save["name"]))
+		load.custom_minimum_size = Vector2(330, 48)
+		load.add_theme_font_size_override("font_size", 20)
+		load.tooltip_text = "Día %d  ·  jugado %s  ·  %s" % [save["day"], SaveManager.format_play_time(save["play_time"]), SaveManager.format_ago(save["last_played"])]
+		row.add_child(load)
+		var detail := _caption("DÍA %d · %s" % [save["day"], SaveManager.format_ago(save["last_played"]).to_upper()])
+		detail.custom_minimum_size = Vector2(0, 48)
+		detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(detail)
+		var delete := Button.new()
+		delete.text = "Borrar"
+		delete.flat = true
+		delete.add_theme_font_size_override("font_size", 13)
+		delete.add_theme_color_override("font_color", Color(1, 0.55, 0.5, 0.7))
+		delete.pressed.connect(_on_delete_world.bind(save["slot"], delete))
+		row.add_child(delete)
+		_worlds_list.add_child(row)
+
+
+func _back_from_worlds() -> void:
+	_worlds_box.visible = false
+	if _worlds_solo:
+		_show_main()
+	else:
+		_show_multiplayer()
+
+
+func _on_delete_world(slot: String, button: Button) -> void:
+	# Primer click pide confirmación; el segundo borra.
+	if button.text != "¿Seguro?":
+		button.text = "¿Seguro?"
+		get_tree().create_timer(3.0).timeout.connect(func(): if is_instance_valid(button): button.text = "Borrar")
+		return
+	SaveManager.delete_save(slot)
+	_refresh_worlds()
+
+
+func _on_continue(slot: String, world_name: String) -> void:
+	var player_name := _player_name()
+	_fade_then(func(): start_pressed.emit(player_name, true, slot, world_name))
+
+
+func _on_load_world(slot: String, world_name: String) -> void:
+	var player_name := _player_name()
+	var solo := _worlds_solo
+	_fade_then(func(): start_pressed.emit(player_name, solo, slot, world_name))
+
+
+func _on_new_world() -> void:
+	var player_name := _player_name()
+	var world_name := _world_name_edit.text.strip_edges()
+	if world_name == "":
+		world_name = "Isla de %s" % player_name
+	var solo := _worlds_solo
+	_fade_then(func(): start_pressed.emit(player_name, solo, "", world_name))
 
 
 func _build_footer() -> void:
@@ -254,6 +376,7 @@ func _play_intro(column: VBoxContainer) -> void:
 
 func _show_main() -> void:
 	_multi_box.visible = false
+	_worlds_box.visible = false
 	_main_box.visible = true
 	set_status("")
 
@@ -280,13 +403,11 @@ func _fade_then(callback: Callable) -> void:
 
 
 func _on_solo() -> void:
-	var player_name := _player_name()
-	_fade_then(func(): solo_pressed.emit(player_name))
+	_show_worlds(true)
 
 
 func _on_host() -> void:
-	var player_name := _player_name()
-	_fade_then(func(): host_pressed.emit(player_name))
+	_show_worlds(false)
 
 
 func _on_join() -> void:

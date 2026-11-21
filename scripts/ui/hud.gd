@@ -179,10 +179,24 @@ func _build_pause_menu() -> void:
 	var resume := UIStyle.button("Continuar")
 	resume.pressed.connect(func(): Game.set_pause_open(false))
 	box.add_child(resume)
+	# Guardar: solo el host (es quien tiene el mundo).
+	if SaveManager.is_active():
+		note.text = "Mundo: %s  ·  se guarda solo cada 3 minutos." % SaveManager.current_name
+		var save := UIStyle.button("Guardar partida")
+		save.pressed.connect(func():
+			if SaveManager.save_game():
+				Network.announce.rpc("Partida guardada")
+			else:
+				show_notification("No se pudo guardar la partida"))
+		box.add_child(save)
+	elif multiplayer.is_server():
+		note.text = "Partida de prueba: este mundo no se guarda."
+	else:
+		note.text = "El host de la partida es quien la guarda."
 	var options := UIStyle.button("Opciones")
 	options.pressed.connect(_open_settings)
 	box.add_child(options)
-	var leave := UIStyle.button("Salir al menú principal")
+	var leave := UIStyle.button("Guardar y salir al menú" if SaveManager.is_active() else "Salir al menú principal")
 	leave.pressed.connect(func(): Game.quit_to_menu_requested.emit())
 	box.add_child(leave)
 

@@ -243,7 +243,12 @@ func _server_think(delta: float) -> void:
 		velocity.y = 6.0  # Salta obstáculos chicos.
 	move_and_slide()
 	if global_position.y < -30.0:
-		queue_free()
+		if tamed_owner != "":
+			# Una mascota nunca se pierde: vuelve a la superficie.
+			global_position.y = _world.terrain.get_height(global_position.x, global_position.z) + 1.0
+			velocity = Vector3.ZERO
+		else:
+			queue_free()
 
 	var horizontal := Vector2(velocity.x, velocity.z)
 	if horizontal.length() > 0.3:
@@ -329,7 +334,11 @@ func _think_pet(_players: Array, speed: float) -> Vector3:
 	var to_owner := owner_node.global_position - global_position
 	to_owner.y = 0
 	if to_owner.length() > 45.0:
-		global_position = owner_node.global_position + Vector3(2, 1, 2)
+		# Se teletransporta cerca del dueño, siempre sobre el terreno (nunca bajo tierra).
+		var spot := owner_node.global_position + Vector3(2, 0, 2)
+		spot.y = _world.terrain.get_height(spot.x, spot.z) + 0.5
+		global_position = spot
+		velocity = Vector3.ZERO
 		return Vector3.ZERO
 	if to_owner.length() > 4.0:
 		return to_owner.normalized() * speed * (1.0 if to_owner.length() > 10.0 else 0.6)
