@@ -13,6 +13,11 @@ signal quit_to_menu_requested
 signal craft_queue_changed
 signal dialog_requested(npc_id: String)
 signal dialog_closed
+signal stats_changed
+signal player_hit(amount: float)
+signal player_died
+signal blueprints_changed
+signal station_opened(station: String)
 
 ## Copia local del inventario (la verdad la tiene el servidor).
 var inventory: Array = []
@@ -22,6 +27,12 @@ var ui_open := false  ## Menú de pausa abierto.
 var dialog_open := false  ## Hablando con un NPC.
 ## Cola de fabricación local: [{recipe, remaining, time_left, time}]
 var craft_queue: Array = []
+## Estadísticas del jugador local (vida y hambre las manda el servidor; la energía es local).
+var health := 100.0
+var hunger := 100.0
+var stamina := 100.0
+## Estación abierta con E ("" = inventario normal con Tab).
+var current_station := ""
 var local_player: Node = null
 ## Mensaje para mostrar en el menú después de volver (p. ej. "se cayó la conexión").
 var pending_menu_message := ""
@@ -61,6 +72,19 @@ func capacity() -> float:
 
 func load_ratio() -> float:
 	return carried_weight() / capacity()
+
+
+func set_stats(new_health: float, new_hunger: float) -> void:
+	health = new_health
+	hunger = new_hunger
+	stats_changed.emit()
+
+
+## Abre el inventario mostrando las recetas de una estación (mesa, horno, fogata).
+func open_station(station: String) -> void:
+	current_station = station
+	set_inventory_open(true)
+	station_opened.emit(station)
 
 
 func set_craft_queue(queue: Array) -> void:
@@ -117,6 +141,8 @@ func can_act() -> bool:
 
 func set_inventory_open(is_open: bool) -> void:
 	inventory_open = is_open
+	if not is_open:
+		current_station = ""
 	_update_mouse()
 	inventory_toggled.emit(is_open)
 
@@ -140,6 +166,10 @@ func reset() -> void:
 	ui_open = false
 	dialog_open = false
 	craft_queue = []
+	health = 100.0
+	hunger = 100.0
+	stamina = 100.0
+	current_station = ""
 	local_player = null
 
 
@@ -156,6 +186,8 @@ func _setup_input() -> void:
 	_add_mouse_button("attack", MOUSE_BUTTON_LEFT)
 	_add_keys("inventory", [KEY_TAB, KEY_I])
 	_add_keys("camera_toggle", [KEY_V])
+	_add_keys("build_rotate", [KEY_R])
+	_add_mouse_button("secondary", MOUSE_BUTTON_RIGHT)
 	_add_keys("pause", [KEY_ESCAPE])
 	_add_keys("skip_cinematic", [KEY_ESCAPE, KEY_ENTER, KEY_SPACE])
 	for i in Inventory.HOTBAR_SIZE:

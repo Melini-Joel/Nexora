@@ -37,6 +37,36 @@ func _draw() -> void:
 			_draw_torch()
 		"backpack":
 			_draw_backpack(c)
+		"berries":
+			for p in [Vector2(0.38, 0.45), Vector2(0.58, 0.4), Vector2(0.48, 0.62), Vector2(0.66, 0.6), Vector2(0.34, 0.68)]:
+				draw_circle(_p(p.x, p.y), size.x * 0.1, c)
+				draw_circle(_p(p.x - 0.03, p.y - 0.03), size.x * 0.03, c.lightened(0.5))
+			draw_line(_p(0.5, 0.2), _p(0.5, 0.38), Color(0.3, 0.5, 0.2), size.x * 0.05)
+		"meat":
+			_poly([Vector2(0.2, 0.5), Vector2(0.35, 0.28), Vector2(0.65, 0.25), Vector2(0.8, 0.45), Vector2(0.7, 0.72), Vector2(0.35, 0.75)], c)
+			_poly([Vector2(0.35, 0.4), Vector2(0.6, 0.35), Vector2(0.65, 0.5), Vector2(0.4, 0.55)], c.lightened(0.25))
+			draw_line(_p(0.75, 0.6), _p(0.9, 0.8), Color(0.95, 0.92, 0.85), size.x * 0.08)
+		"leather":
+			_poly([Vector2(0.2, 0.3), Vector2(0.45, 0.22), Vector2(0.8, 0.3), Vector2(0.75, 0.75), Vector2(0.5, 0.8), Vector2(0.25, 0.7)], c)
+			_poly([Vector2(0.3, 0.38), Vector2(0.65, 0.34), Vector2(0.62, 0.6), Vector2(0.35, 0.62)], c.lightened(0.12))
+		"club":
+			draw_line(_p(0.28, 0.85), _p(0.68, 0.22), c, size.x * 0.1)
+			draw_circle(_p(0.68, 0.22), size.x * 0.13, c.darkened(0.1))
+		"spear":
+			draw_line(_p(0.18, 0.88), _p(0.72, 0.28), Color(0.5, 0.34, 0.2), size.x * 0.06)
+			_poly([Vector2(0.68, 0.32), Vector2(0.88, 0.1), Vector2(0.76, 0.36)], c)
+		"sword":
+			draw_line(_p(0.25, 0.8), _p(0.78, 0.2), c, size.x * 0.09)
+			draw_line(_p(0.2, 0.62), _p(0.4, 0.82), Color(0.45, 0.38, 0.2), size.x * 0.07)
+			draw_line(_p(0.17, 0.88), _p(0.28, 0.76), Color(0.4, 0.28, 0.16), size.x * 0.07)
+		"hammer":
+			draw_line(_p(0.3, 0.88), _p(0.58, 0.32), Color(0.5, 0.34, 0.2), size.x * 0.08)
+			_poly([Vector2(0.4, 0.2), Vector2(0.78, 0.36), Vector2(0.72, 0.5), Vector2(0.34, 0.34)], c)
+		"blueprint":
+			draw_rect(Rect2(_p(0.18, 0.2), _p(0.64, 0.6)), c)
+			for i in 4:
+				draw_line(_p(0.25, 0.3 + i * 0.12), _p(0.75, 0.3 + i * 0.12), Color(1, 1, 1, 0.35), 1.0)
+			draw_rect(Rect2(_p(0.3, 0.35), _p(0.3, 0.3)), Color(1, 1, 1, 0.8), false, 2.0)
 		_:
 			draw_circle(size * 0.5, size.x * 0.3, c)
 

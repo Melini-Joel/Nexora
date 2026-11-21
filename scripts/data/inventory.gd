@@ -213,3 +213,14 @@ func remove_items(items: Dictionary) -> bool:
 	for id: String in items:
 		remove(id, int(items[id]))
 	return true
+
+
+## Saca una cantidad de un casillero puntual (comer, usar un plano, alimentar animales).
+func take_amount(index: int, amount: int) -> bool:
+	var slot := get_slot(index)
+	if slot.is_empty() or slot["count"] < amount:
+		return false
+	slot["count"] -= amount
+	if slot["count"] <= 0:
+		slots[index] = {}
+	return true

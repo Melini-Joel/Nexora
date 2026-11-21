@@ -15,6 +15,9 @@ extends RefCounted
 ##   deliver: entregarle ítems al NPC (los pone el jugador que entrega)
 ##   talk:    hablar con un NPC
 ##   reach:   que cualquier jugador llegue a un lugar
+##   kill:    derrotar criaturas (item = especie)
+##   tame:    domesticar un animal (item = especie o "any")
+##   build:   construir una pieza (item = id de la pieza)
 
 const QUESTS := {
 	"intro": {
@@ -57,6 +60,16 @@ const QUESTS := {
 		],
 		"rewards": {"large_backpack": 1},
 	},
+	"t_hunt": {
+		"giver": "tomas", "requires": ["t_wood"],
+		"title": "Carne para el fuego",
+		"description": "Cacen ciervos para conseguir carne y cuero. Cocinen la carne en la fogata.",
+		"offer": "Las bayas no alcanzan. Fabriquen una lanza o un garrote y cacen 2 ciervos. La carne se cocina en la fogata (E sobre el fuego).",
+		"progress": "Los ciervos huyen rápido: acérquense despacio y con la lanza llegan más lejos.",
+		"complete": "¡Huele bien! Tomen carne cocida para el camino. Comer la tienen que hacer seguido: miren la barra de hambre.",
+		"objectives": [{"type": "kill", "item": "deer", "amount": 2, "text": "Cazar ciervos"}],
+		"rewards": {"cooked_meat": 4, "leather": 5},
+	},
 	# --- Ilse, la herrera --------------------------------------------------------------
 	"i_ore": {
 		"giver": "ilse", "requires": ["t_wood"],
@@ -88,6 +101,16 @@ const QUESTS := {
 		"objectives": [{"type": "craft", "item": "metal_pickaxe", "amount": 1, "text": "Fabricar un pico de metal"}],
 		"rewards": {"metal_fragments": 20},
 	},
+	"i_shades": {
+		"giver": "ilse", "requires": ["i_ore"],
+		"title": "Noche de sombras",
+		"description": "De noche salen las sombras. Derroten 5 y busquen los planos que dejan.",
+		"offer": "Cuando cae el sol aparecen unas sombras con ojos rojos. Mátenlas: a veces dejan planos de construcción. Derroten 5 y vuelvan.",
+		"progress": "Las sombras solo salen de noche. Lleven antorchas y armas.",
+		"complete": "Son de otro mundo, esas cosas. Tomen estos planos: les van a servir para refugiarse.",
+		"objectives": [{"type": "kill", "item": "shade", "amount": 5, "text": "Derrotar sombras"}],
+		"rewards": {"bp_foundation": 1, "bp_wall": 1},
+	},
 	# --- Eco, el ermitaño --------------------------------------------------------------
 	"e_monolith": {
 		"giver": "eco", "requires": ["intro"], "auto_complete": true,
@@ -100,6 +123,16 @@ const QUESTS := {
 		"rewards": {"metal_fragments": 15},
 		"on_accept_cinematic": "reveal_monolith",
 		"on_complete_cinematic": "monolith_awakens",
+	},
+	"e_friend": {
+		"giver": "eco", "requires": ["intro"],
+		"title": "Un amigo fiel",
+		"description": "Domesticá cualquier animal dándole su comida favorita (mirá la tabla de domesticación).",
+		"offer": "Los animales de esta isla son desconfiados, pero si les das lo que les gusta, te siguen a todos lados. Domestiquen uno.",
+		"progress": "Con la comida en la mano, acercate y apretá E. Cada animal quiere algo distinto.",
+		"complete": "Se nota que te quiere. Tomá, para que lo cuides bien.",
+		"objectives": [{"type": "tame", "item": "any", "amount": 1, "text": "Domesticar un animal"}],
+		"rewards": {"leather": 10, "berries": 10},
 	},
 	# --- Nilo, el pescador -------------------------------------------------------------
 	"n_supplies": {
@@ -124,6 +157,16 @@ const QUESTS := {
 		"complete": "¿Un mirador de piedra? Entonces no fuimos los primeros en esta isla... Tomen, encontré este mineral.",
 		"objectives": [{"type": "reach", "target": "lookout", "radius": 6.0, "amount": 1, "text": "Llegar al mirador"}],
 		"rewards": {"metal_ore": 20},
+	},
+	"n_shelter": {
+		"giver": "nilo", "requires": ["n_supplies"],
+		"title": "Un techo propio",
+		"description": "Construí un cimiento con el martillo (necesitan el plano de cimiento).",
+		"offer": "Dormir al aire libre con esas sombras... Fabriquen un martillo y levanten un refugio. Los planos se encuentran en cofres por la isla.",
+		"progress": "Con el martillo en la mano, R cambia de pieza y click construye.",
+		"complete": "¡Un refugio! Tomen este plano, encontré varios en la playa.",
+		"objectives": [{"type": "build", "item": "wood_foundation", "amount": 1, "text": "Construir un cimiento de madera"}],
+		"rewards": {"bp_doorway": 1, "bp_roof": 1},
 	},
 }
 

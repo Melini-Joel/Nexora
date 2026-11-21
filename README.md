@@ -3,7 +3,9 @@
 RPG cooperativo de mundo abierto en 3D (2 a 6 jugadores) hecho con **Godot 4.3+** y **GDScript**.
 Estilo low-poly: liviano para cualquier PC, pero con iluminación, sombras, niebla y brillo.
 
-![Animaciones](docs/09_animaciones.png)
+![Construcción y animales](docs/17_construccion_animales.png)
+
+![Noche con sombras](docs/18_noche_sombras.png)
 
 ## Cómo abrirlo
 
@@ -59,10 +61,12 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 |---|---|
 | WASD / flechas | Moverse |
 | Mouse | Cámara |
-| Shift | Correr |
-| Espacio | Saltar |
-| Click izquierdo (mantener) | Talar árboles / picar rocas |
-| E | Hablar con NPCs · recoger bolsas del suelo |
+| Shift | Correr (gasta energía) |
+| Espacio | Saltar (gasta energía) |
+| **Click izquierdo** | Depende de lo que apuntes y tengas en la mano: recolectar, **atacar**, **comer**, **aprender un plano** o **construir** (con el martillo) |
+| Click derecho | Con el martillo: desarmar una pieza (devuelve la mitad) |
+| **E** | Hablar con NPCs, recoger bolsas, **usar estaciones** (mesa, horno, fogata), **abrir cofres y puertas**, **domesticar** o dar órdenes a tu mascota |
+| R | Con el martillo: cambiar de pieza |
 | 1-6 / rueda del mouse | Elegir objeto de la barra rápida |
 | Tab / I | Abrir inventario |
 | V | Cámara cerca / normal / lejos |
@@ -78,6 +82,30 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 | Soltar fuera del inventario | Tirar al suelo en una bolsa (cualquier compañero la puede recoger) |
 
 ## Qué incluye este prototipo
+
+### Mundo
+- **Isla de 512 × 512 m** (4 veces más grande) con **4 biomas**: Pradera, Bosque, Desierto y Tundra nevada. Cada uno tiene sus colores, árboles, recursos y animales. Arriba de la pantalla se ve en qué bioma estás.
+- **Pasto denso que se mueve con el viento**, agua con olas, niebla y cielo dinámico.
+- **Ciclo de día y noche** de 12 minutos (unos 8 de día y 4 de noche), sincronizado para todos los jugadores.
+
+### Supervivencia
+- **Vida, hambre y energía.** El hambre baja con el tiempo y, si llega a 0, perdés vida. La energía se gasta al correr, saltar y pelear.
+- **Comida:** bayas, carne cruda (hace mal) y carne cocida (cocinala con E sobre una fogata).
+- **Muerte:** dejás todo en el suelo y reaparecés en el campamento.
+
+### Combate y animales
+- **Armas:** garrote de madera, lanza de piedra (mucho alcance) y espada de metal (en la mesa de trabajo).
+- **Animales:** conejo, ciervo, jabalí, lobo, oso y lagarto. Huyen, se defienden o te atacan según la especie. Al cazarlos sueltan carne y cuero.
+- **Sombras nocturnas:** de noche aparecen sombras (y desde el día 2, brutos) que te buscan. Se queman al amanecer y pueden soltar **planos**.
+- **Domesticación:** ver **[TABLA_DOMESTICACION.md](TABLA_DOMESTICACION.md)**.
+
+### Construcción
+- **Planos:** se encuentran en **30 cofres** repartidos por la isla (se rellenan cada 8 minutos) o derrotando sombras. Click con el plano en la mano lo aprende **todo el grupo**.
+- **Martillo:** con el martillo en la mano ves una vista previa (verde si se puede construir, rojo si no). R cambia de pieza, click construye y click derecho desarma.
+- **Piezas:** cimiento, pared, puerta que se abre con E, techo (que sirve de segundo piso) y fogata, en versiones de madera y de piedra. Encajan solas en una cuadrícula de 3 m.
+
+### Estaciones
+- **Mesa de trabajo, horno y fogatas:** apretá E y se abre el inventario solo con las recetas de esa estación.
 
 - **Personajes articulados** (cabeza, torso, brazos y piernas con codos y rodillas) con animaciones de quieto, caminar, correr, saltar, caer, aterrizar, golpear, fabricar y caminar encorvado por el peso. Cada jugador tiene su propia apariencia.
 - **NPCs con diálogos:** Tomás el leñador (campamento), Ilse la herrera (forja), Eco el ermitaño (cerca de la cima) y Nilo el pescador (muelle). Muestran **!** cuando tienen una misión y **?** cuando podés entregarla.
@@ -123,9 +151,19 @@ scripts/
     recipe_db.gd       Recetas de fabricación
     quest_db.gd        Misiones (textos, objetivos, recompensas)
     npc_db.gd          NPCs (nombre, apariencia, saludos)
+    creature_db.gd     Animales y sombras (vida, daño, comida para domesticar)
+    build_db.gd        Piezas de construcción (costo, planos necesarios)
     inventory.gd       Lógica del inventario (agregar, mover, dividir, peso)
   world/item_drop.gd   Bolsa en el suelo
   world/npc.gd         NPC (mira al jugador, marcador ! / ?)
+  world/creature.gd    Animales y sombras (IA en el servidor, domesticación)
+  world/build_piece.gd Piezas de construcción
+  world/day_night.gd   Ciclo de día y noche
+  world/grass.gd       Pasto por parcelas con viento
+  world/station.gd     Estaciones interactuables
+  world/loot_chest.gd  Cofres con botín
+  characters/quadruped.gd  Cuerpo y animaciones de los animales
+shaders/               Pasto y agua
   player/player.gd     Movimiento, peso, cámara 3ª persona, herramientas, interacción
   ui/
     inventory_ui.gd    Barra rápida, ventana de inventario, indicador de carga
@@ -152,9 +190,9 @@ scripts/
 3. ~~Misiones y cinemáticas básicas~~ ✅
 4. ~~Inventario por casilleros, peso y herramientas~~ ✅
 5. ~~Fabricación, NPCs con misiones y personajes animados~~ ✅
-6. **Construcción:** piezas con encaje (piso, pared, techo) de madera y piedra
-7. Ciclo día/noche, clima y biomas
-8. Enemigos y combate cooperativo
-9. Guardado de partida (mundo, construcciones, inventarios)
-10. Modelos con esqueleto (Blender / Mixamo) y sonido
-11. Mundo más grande por zonas
+6. ~~Biomas, día/noche, supervivencia, combate, animales, domesticación y construcción~~ ✅
+7. **Guardado de partida** (mundo, construcciones, inventarios, mascotas)
+8. Mapa (tecla M) y brújula
+9. Cofres de almacenamiento, camas para reaparecer en tu base
+10. Sonido y música
+11. Modelos con esqueleto (Blender / Mixamo)

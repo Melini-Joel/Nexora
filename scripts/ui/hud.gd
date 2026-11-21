@@ -16,6 +16,13 @@ var _pause_overlay: Control
 var _last_totals: Dictionary = {}
 var _crosshair: Label
 var _fps_label: Label
+var _bars: Dictionary = {}  ## "health" / "hunger" / "stamina" -> [ProgressBar, Label]
+var _clock: Label
+var _biome: Label
+var _damage_flash: ColorRect
+var _build_hint: Label
+var _was_night := false
+var _last_biome := ""
 var _pause_box: Control
 
 
@@ -30,6 +37,9 @@ func _ready() -> void:
 	_build_quest_panel()
 	_build_center()
 	_build_bottom()
+	_build_vitals()
+	_build_clock()
+	_build_effects()
 	_build_pause_menu()
 
 	Game.inventory_changed.connect(_on_inventory_changed)
@@ -41,6 +51,9 @@ func _ready() -> void:
 	Game.inventory_changed.connect(_refresh_quest)
 	Game.dialog_requested.connect(_open_dialog)
 	Game.dialog_closed.connect(func(): _crosshair.visible = true)
+	Game.stats_changed.connect(_refresh_vitals)
+	Game.player_hit.connect(_on_player_hit)
+	Game.player_died.connect(func(): show_notification("Moriste. Tus cosas quedaron donde caíste: volvé a buscarlas."))
 	Network.players_changed.connect(_refresh_players)
 	Cinematics.started.connect(func(): _root.visible = false)
 	Cinematics.finished.connect(func(): _root.visible = true)
@@ -128,7 +141,7 @@ func _build_bottom() -> void:
 	_notifications.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_notifications)
 
-	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click golpear · E recoger\n1-6 / rueda: barra rápida · V cámara · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
+	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click usar/atacar · E interactuar\n1-6 / rueda: barra rápida · R pieza (martillo) · V cámara · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.offset_left = 20
@@ -226,7 +239,139 @@ func _refresh_quest() -> void:
 		_quest_objectives.add_child(UIStyle.label("  ... y %d más" % (active.size() - 4), 14, UIStyle.TEXT_DIM))
 
 
+## Vida, hambre y energía (abajo a la derecha).
+func _build_vitals() -> void:
+	var panel := UIStyle.panel(Color(0.06, 0.08, 0.1, 0.75), 10)
+	panel.anchor_left = 1.0
+	panel.anchor_right = 1.0
+	panel.anchor_top = 1.0
+	panel.anchor_bottom = 1.0
+	panel.offset_left = -260
+	panel.offset_right = -20
+	panel.offset_top = -110
+	panel.offset_bottom = -20
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_root.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 5)
+	panel.add_child(box)
+	for entry in [["health", "Vida", Color(0.85, 0.25, 0.22)], ["hunger", "Hambre", Color(0.9, 0.6, 0.2)], ["stamina", "Energía", Color(0.45, 0.8, 0.35)]]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		box.add_child(row)
+		var label := UIStyle.label(entry[1], 14)
+		label.custom_minimum_size = Vector2(62, 0)
+		row.add_child(label)
+		var bar := ProgressBar.new()
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(150, 14)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var fill := StyleBoxFlat.new()
+		fill.bg_color = entry[2]
+		fill.set_corner_radius_all(3)
+		var background := StyleBoxFlat.new()
+		background.bg_color = Color(0.15, 0.15, 0.15, 0.9)
+		background.set_corner_radius_all(3)
+		bar.add_theme_stylebox_override("fill", fill)
+		bar.add_theme_stylebox_override("background", background)
+		row.add_child(bar)
+		_bars[entry[0]] = [bar, label]
+	_refresh_vitals()
+
+
+func _refresh_vitals() -> void:
+	(_bars["health"][0] as ProgressBar).value = Game.health
+	(_bars["hunger"][0] as ProgressBar).value = Game.hunger
+	(_bars["hunger"][1] as Label).add_theme_color_override("font_color", Color(1, 0.45, 0.4) if Game.hunger < 15 else UIStyle.TEXT)
+
+
+## Reloj, día y bioma (arriba al centro).
+func _build_clock() -> void:
+	var panel := UIStyle.panel(Color(0.06, 0.08, 0.1, 0.65), 8)
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.offset_left = -130
+	panel.offset_right = 130
+	panel.offset_top = 16
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_root.add_child(panel)
+	var box := VBoxContainer.new()
+	panel.add_child(box)
+	_clock = UIStyle.label("", 17)
+	_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(_clock)
+	_biome = UIStyle.label("", 14, UIStyle.TEXT_DIM)
+	_biome.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(_biome)
+
+
+func _build_effects() -> void:
+	_damage_flash = ColorRect.new()
+	_damage_flash.color = Color(0.8, 0.05, 0.05, 0.0)
+	_damage_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_damage_flash)
+	_build_hint = UIStyle.label("", 16, UIStyle.ACCENT)
+	_build_hint.anchor_left = 0.5
+	_build_hint.anchor_right = 0.5
+	_build_hint.anchor_top = 1.0
+	_build_hint.anchor_bottom = 1.0
+	_build_hint.offset_left = -400
+	_build_hint.offset_right = 400
+	_build_hint.offset_top = -150
+	_build_hint.offset_bottom = -100
+	_build_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_build_hint.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_build_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root.add_child(_build_hint)
+
+
+func _on_player_hit(_amount: float) -> void:
+	var tween := create_tween()
+	tween.tween_property(_damage_flash, "color:a", 0.35, 0.05)
+	tween.tween_property(_damage_flash, "color:a", 0.0, 0.4)
+
+
+func _update_world_info() -> void:
+	var world := get_tree().get_first_node_in_group("world")
+	if world == null or not world.generated:
+		return
+	var day_night: DayNight = world.day_night
+	_clock.text = "Día %d  ·  %s  ·  %s" % [day_night.day, day_night.clock_text(), day_night.period_name()]
+	var night := day_night.is_night()
+	if night and not _was_night:
+		show_notification("Cae la noche... las sombras salen a cazar. Prendé una antorcha.")
+	elif not night and _was_night:
+		show_notification("Amanece. Las sombras se queman con la luz del sol.")
+	_was_night = night
+	var player := Game.local_player
+	if player:
+		var biome: String = TerrainGenerator.BIOME_NAMES[world.terrain.get_biome(player.global_position.x, player.global_position.z)]
+		_biome.text = biome
+		if biome != _last_biome and _last_biome != "":
+			show_notification("Entraste a: %s" % biome)
+		_last_biome = biome
+		_update_build_hint(player, world)
+	(_bars["stamina"][0] as ProgressBar).value = Game.stamina
+
+
+func _update_build_hint(player: Node, world: Node) -> void:
+	if player.held_item != "hammer" or Game.inventory_open:
+		_build_hint.text = ""
+		return
+	var piece: String = player.current_build_piece()
+	if piece == "":
+		_build_hint.text = "No conocen ningún plano. Encuéntrenlos en cofres o derrotando sombras de noche."
+		return
+	var data := BuildDB.get_piece(piece)
+	var placement: Dictionary = player.build_placement()
+	var status: String = "Click: construir" if placement.get("valid", false) else placement.get("reason", "")
+	_build_hint.text = "%s  (%s)   ·   %s   ·   R: cambiar pieza   ·   Click der.: desarmar" % [
+		data["name"], ItemDB.list_text(data["cost"]), status]
+
+
 func _process(_delta: float) -> void:
+	_update_world_info()
 	_fps_label.visible = Settings.get_value("show_fps")
 	if _fps_label.visible:
 		_fps_label.text = "FPS: %d" % Engine.get_frames_per_second()

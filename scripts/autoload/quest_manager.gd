@@ -143,6 +143,18 @@ func report_craft(item: String, amount: int) -> void:
 	_report("craft", item, amount)
 
 
+func report_kill(species: String) -> void:
+	_report("kill", species, 1)
+
+
+func report_tame(species: String) -> void:
+	_report("tame", species, 1)
+
+
+func report_build(piece_id: String) -> void:
+	_report("build", piece_id, 1)
+
+
 func _report(type: String, item: String, amount: int) -> void:
 	if not multiplayer.is_server():
 		return
@@ -153,7 +165,7 @@ func _report(type: String, item: String, amount: int) -> void:
 		var objectives: Array = QuestDB.get_quest(id)["objectives"]
 		for i in objectives.size():
 			var objective: Dictionary = objectives[i]
-			if objective["type"] == type and objective["item"] == item and progress[id][i] < objective["amount"]:
+			if objective["type"] == type and objective["item"] in [item, "any"] and progress[id][i] < objective["amount"]:
 				progress[id][i] = mini(progress[id][i] + amount, objective["amount"])
 				changed = true
 	if changed:

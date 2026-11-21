@@ -1,0 +1,45 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/creature.gd" id="1_creature"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_creature"]
+properties/0/path = NodePath(".:species")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+properties/1/path = NodePath(".:position")
+properties/1/spawn = true
+properties/1/replication_mode = 0
+properties/2/path = NodePath(".:sync_pos")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:sync_rot")
+properties/3/spawn = true
+properties/3/replication_mode = 1
+properties/4/path = NodePath(".:anim_speed")
+properties/4/spawn = true
+properties/4/replication_mode = 2
+properties/5/path = NodePath(".:health_ratio")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+properties/6/path = NodePath(".:tamed_owner")
+properties/6/spawn = true
+properties/6/replication_mode = 2
+properties/7/path = NodePath(".:tame_progress")
+properties/7/spawn = true
+properties/7/replication_mode = 2
+properties/8/path = NodePath(".:follow_owner")
+properties/8/spawn = true
+properties/8/replication_mode = 2
+properties/9/path = NodePath(".:attack_count")
+properties/9/spawn = true
+properties/9/replication_mode = 2
+properties/10/path = NodePath(".:dead")
+properties/10/spawn = true
+properties/10/replication_mode = 2
+
+[node name="Creature" type="CharacterBody3D"]
+script = ExtResource("1_creature")
+
+[node name="Synchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_interval = 0.05
+replication_config = SubResource("SceneReplicationConfig_creature")

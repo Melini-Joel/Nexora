@@ -12,11 +12,13 @@ var _station: Label
 var _time: Label
 var _amount_label: Label
 var _craft_button: Button
+var _header: Label
 
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 8)
-	add_child(UIStyle.label("FABRICACIÓN", 18, UIStyle.ACCENT))
+	_header = UIStyle.label("FABRICACIÓN", 18, UIStyle.ACCENT)
+	add_child(_header)
 
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(330, 170)
@@ -63,7 +65,23 @@ func _ready() -> void:
 	row.add_child(_craft_button)
 
 	Game.inventory_changed.connect(refresh)
+	Game.station_opened.connect(func(_s: String): _apply_filter())
+	Game.inventory_toggled.connect(func(_open: bool): _apply_filter())
 	_select(RecipeDB.RECIPES.keys()[0])
+
+
+## Al usar una estación (E sobre la mesa, el horno o la fogata) se muestran solo sus recetas.
+func _apply_filter() -> void:
+	var station := Game.current_station
+	_header.text = "FABRICACIÓN" if station == "" else RecipeDB.STATIONS.get(station, station).to_upper()
+	var first := ""
+	for id: String in _buttons:
+		var recipe_station: String = RecipeDB.get_recipe(id).get("station", "")
+		_buttons[id].visible = station == "" or recipe_station == station
+		if _buttons[id].visible and first == "":
+			first = id
+	if first != "" and not _buttons[_selected].visible:
+		_select(first)
 
 
 func _make_recipe_button(recipe_id: String) -> Button:
