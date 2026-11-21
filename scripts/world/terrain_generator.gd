@@ -77,7 +77,7 @@ func get_slope(x: float, z: float) -> float:
 	return 1.0 - Vector3(-dx * 0.5, 1.0, -dz * 0.5).normalized().y
 
 
-func find_highest_point(max_radius: float) -> Vector3:
+func find_highest_point(max_radius: float, avoid: Vector2 = Vector2.INF, avoid_radius: float = 0.0) -> Vector3:
 	var best := Vector3(0, -INF, 0)
 	var half := SIZE * 0.5
 	for iz in RESOLUTION + 1:
@@ -85,6 +85,8 @@ func find_highest_point(max_radius: float) -> Vector3:
 			var x := -half + ix * _step
 			var z := -half + iz * _step
 			if Vector2(x, z).length() > max_radius:
+				continue
+			if avoid != Vector2.INF and Vector2(x, z).distance_to(avoid) < avoid_radius:
 				continue
 			var h := _h(ix, iz)
 			if h > best.y:

@@ -12,8 +12,9 @@ const BUSH_COUNT := 450
 const RESPAWN_TIME := 90.0  ## Segundos hasta que reaparece un recurso agotado.
 const GATHER_RANGE := 6.0  ## Distancia máxima aceptada por el servidor (anti-trampas).
 const GATHER_MIN_INTERVAL_MS := 350
-const TOOL_MULTIPLIER := 3  ## Cuánto rinde la herramienta correcta frente a la mano.
-const STARTER_KIT := [["stone_hatchet", 1], ["stone_pickaxe", 1]]
+const FIBER_COUNT := 160
+const STARTER_KIT := [["stone_hatchet", 1]]
+const MAX_CRAFT_QUEUE := 8
 
 var generated := false
 var terrain: TerrainGenerator
@@ -28,6 +29,9 @@ var _inventories: Dictionary = {}  ## peer_id -> Inventory
 var _saved_inventories: Dictionary = {}  ## nombre -> Array (para volver a entrar sin perder todo)
 var _last_gather_ms: Dictionary = {}
 var _drop_counter := 0
+var _craft_queues: Dictionary = {}  ## peer_id -> [{recipe, remaining, time_left, time}]
+## Zonas donde no se ponen árboles ni rocas (campamento, NPCs, estaciones): [Vector2, radio]
+var _clear_zones: Array = []
 
 var _crystal: Node3D
 var _crystal_base_y := 0.0
@@ -61,6 +65,7 @@ func _process(delta: float) -> void:
 		_fire_light.light_energy = 2.0 + sin(_time * 17.0) * 0.25 + sin(_time * 7.3) * 0.2
 	if multiplayer.is_server():
 		_update_respawns(delta)
+		_update_crafting(delta)
 
 
 # --- Generación --------------------------------------------------------------------
@@ -158,6 +163,105 @@ func _place_landmarks() -> void:
 	add_child(monolith)
 	_crystal = monolith.get_node("Crystal")
 	_crystal_base_y = _crystal.position.y
+	_clear_zones.append([Vector2(0, 0), TerrainGenerator.SPAWN_RADIUS])
+	_clear_zones.append([Vector2(top.x, top.z), 5.0])
+	_place_settlements()
+
+
+## Campamento, forja, ermitaño, muelle y mirador. Todo se calcula a partir del terreno,
+## así que es igual para todos los jugadores.
+func _place_settlements() -> void:
+	var monolith: Vector3 = landmarks["monolith"]
+	var to_monolith := Vector2(monolith.x, monolith.z).normalized()
+
+	# Campamento: mesa de trabajo y Tomás.
+	landmarks["workbench"] = _ground(Vector2(5.5, -3.0))
+	_place_prop(PropFactory.make_workbench(), landmarks["workbench"], Vector3.ZERO)
+	landmarks["camp_npc"] = _ground(Vector2(6.8, -0.2))
+	_spawn_npc("tomas", landmarks["camp_npc"])
+
+	# Forja de Ilse: a mitad de camino hacia el monolito, en un lugar plano.
+	var forge := _find_flat_near(Vector2(monolith.x, monolith.z) * 0.45, 22.0)
+	landmarks["furnace"] = forge
+	_place_prop(PropFactory.make_furnace(), forge, Vector3.ZERO, -to_monolith)
+	_place_prop(PropFactory.make_anvil(), _ground(Vector2(forge.x, forge.z) + Vector2(2.2, 1.0)), Vector3.ZERO)
+	landmarks["forge_npc"] = _ground(Vector2(forge.x, forge.z) + Vector2(-2.2, -1.6))
+	_spawn_npc("ilse", landmarks["forge_npc"])
+	_clear_zones.append([Vector2(forge.x, forge.z), 6.0])
+
+	# Ermitaño: en la ladera, antes de la cima.
+	landmarks["hermit_npc"] = _find_flat_near(Vector2(monolith.x, monolith.z) - to_monolith * 16.0, 10.0, 0.5)
+	_spawn_npc("eco", landmarks["hermit_npc"])
+	_clear_zones.append([Vector2(landmarks["hermit_npc"].x, landmarks["hermit_npc"].z), 4.0])
+
+	# Muelle de Nilo: en la costa del lado opuesto al monolito.
+	_place_dock(-to_monolith)
+
+	# Mirador: el punto más alto lejos del monolito.
+	var lookout := terrain.find_highest_point(TerrainGenerator.SIZE * 0.4, Vector2(monolith.x, monolith.z), 70.0)
+	landmarks["lookout"] = lookout
+	_place_prop(PropFactory.make_cairn(), lookout - Vector3(0, 0.2, 0), Vector3.ZERO)
+	_clear_zones.append([Vector2(lookout.x, lookout.z), 4.0])
+
+
+func _ground(p: Vector2) -> Vector3:
+	return Vector3(p.x, terrain.get_height(p.x, p.y), p.y)
+
+
+func _place_prop(prop: Node3D, pos: Vector3, rot: Vector3, facing: Vector2 = Vector2.ZERO) -> void:
+	prop.position = pos
+	prop.rotation = rot
+	if facing != Vector2.ZERO:
+		prop.rotation.y = atan2(-facing.x, -facing.y)
+	add_child(prop)
+	_clear_zones.append([Vector2(pos.x, pos.z), 3.5])
+
+
+func _spawn_npc(id: String, pos: Vector3) -> void:
+	var npc := NPC.new()
+	npc.setup(id)
+	npc.position = pos
+	add_child(npc)
+	_clear_zones.append([Vector2(pos.x, pos.z), 3.5])
+
+
+## Busca en espiral un lugar plano y sobre el agua cerca de un punto.
+func _find_flat_near(center: Vector2, radius: float, max_slope: float = 0.25) -> Vector3:
+	for ring in 12:
+		var r := radius * ring / 11.0
+		var samples := maxi(1, ring * 6)
+		for i in samples:
+			var angle := TAU * i / samples
+			var p := center + Vector2(cos(angle), sin(angle)) * r
+			var h := terrain.get_height(p.x, p.y)
+			if h > TerrainGenerator.WATER_LEVEL + 1.5 and terrain.get_slope(p.x, p.y) <= max_slope:
+				return Vector3(p.x, h, p.y)
+	return _ground(center)
+
+
+func _place_dock(direction: Vector2) -> void:
+	for attempt in 12:
+		var dir := direction.rotated(attempt * 0.5 * (1 if attempt % 2 == 0 else -1))
+		for step in range(20, int(TerrainGenerator.SIZE * 0.5)):
+			var p := dir * step
+			if terrain.get_height(p.x, p.y) < TerrainGenerator.WATER_LEVEL + 0.3:
+				var shore := dir * (step - 1)
+				var dock := PropFactory.make_dock(10.0)
+				dock.position = Vector3(shore.x, TerrainGenerator.WATER_LEVEL + 0.45, shore.y)
+				dock.rotation.y = atan2(-dir.x, -dir.y)
+				add_child(dock)
+				var npc_spot := dir * (step - 3)
+				landmarks["dock_npc"] = _ground(npc_spot)
+				_spawn_npc("nilo", landmarks["dock_npc"])
+				_clear_zones.append([shore, 6.0])
+				return
+	# Si no hay costa (no debería pasar), Nilo se queda cerca del campamento.
+	landmarks["dock_npc"] = _ground(Vector2(-7, 3))
+	_spawn_npc("nilo", landmarks["dock_npc"])
+
+
+func is_near_station(pos: Vector3, station: String) -> bool:
+	return landmarks.has(station) and pos.distance_to(landmarks[station]) <= RecipeDB.STATION_RANGE
 
 
 func _place_resources(world_seed: int) -> void:
@@ -183,6 +287,13 @@ func _place_resources(world_seed: int) -> void:
 		var rock := PropFactory.make_rock(rng, is_ore)
 		_add_resource(container, rock, "Rock_%d" % i, spot - Vector3(0, 0.2, 0), rng.randf() * TAU)
 
+	for i in FIBER_COUNT:
+		var spot := _find_spot(rng, TerrainGenerator.WATER_LEVEL + 0.8, 16.0, 0.35, 1.5, used)
+		if spot == Vector3.INF:
+			continue
+		var plant := PropFactory.make_fiber_plant(rng)
+		_add_resource(container, plant, "Fiber_%d" % i, spot - Vector3(0, 0.05, 0), rng.randf() * TAU)
+
 
 func _add_resource(container: Node3D, node: ResourceNode, key: String, pos: Vector3, yaw: float) -> void:
 	node.name = key
@@ -198,7 +309,7 @@ func _find_spot(rng: RandomNumberGenerator, min_h: float, max_h: float, max_slop
 	var limit := TerrainGenerator.SIZE * 0.46
 	for attempt in 30:
 		var p := Vector2(rng.randf_range(-limit, limit), rng.randf_range(-limit, limit))
-		if p.length() < TerrainGenerator.SPAWN_RADIUS * 0.8:
+		if _in_clear_zone(p):
 			continue
 		var h := terrain.get_height(p.x, p.y)
 		if h < min_h or h > max_h or terrain.get_slope(p.x, p.y) > max_slope:
@@ -214,6 +325,13 @@ func _find_spot(rng: RandomNumberGenerator, min_h: float, max_h: float, max_slop
 	return Vector3.INF
 
 
+func _in_clear_zone(p: Vector2) -> bool:
+	for zone in _clear_zones:
+		if p.distance_to(zone[0]) < zone[1]:
+			return true
+	return false
+
+
 ## Arbustos decorativos con MultiMesh: cientos de objetos en una sola llamada de dibujo.
 func _place_bushes(world_seed: int) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -225,7 +343,7 @@ func _place_bushes(world_seed: int) -> void:
 			break
 		var p := Vector2(rng.randf_range(-limit, limit), rng.randf_range(-limit, limit))
 		var h := terrain.get_height(p.x, p.y)
-		if h < TerrainGenerator.WATER_LEVEL + 0.8 or h > 18.0 or p.length() < 5.0:
+		if h < TerrainGenerator.WATER_LEVEL + 0.8 or h > 18.0 or _in_clear_zone(p):
 			continue
 		var basis := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * rng.randf_range(0.6, 1.3))
 		transforms.append(Transform3D(basis, Vector3(p.x, h + 0.1, p.y)))
@@ -282,9 +400,15 @@ func _on_player_left(peer_id: int) -> void:
 	if player:
 		var inventory: Inventory = _inventories.get(peer_id)
 		if inventory:
+			# Lo que estaba fabricando vuelve al inventario.
+			for job in _craft_queues.get(peer_id, []):
+				var ingredients: Dictionary = RecipeDB.get_recipe(job["recipe"])["ingredients"]
+				for item: String in ingredients:
+					inventory.add(item, int(ingredients[item]) * int(job["remaining"]))
 			_saved_inventories[player.player_name] = inventory.to_array()
 		player.queue_free()
 	_inventories.erase(peer_id)
+	_craft_queues.erase(peer_id)
 	_last_gather_ms.erase(peer_id)
 
 
@@ -336,6 +460,21 @@ func _handle_action(peer_id: int, action: String, args: Array) -> void:
 		"quick_move":
 			if args.size() == 1:
 				changed = inventory.quick_move(int(args[0]))
+		"craft":
+			if args.size() == 2:
+				_server_craft(peer_id, str(args[0]), int(args[1]))
+		"craft_cancel":
+			if args.size() == 1:
+				_server_craft_cancel(peer_id, int(args[0]))
+		"talk":
+			if args.size() == 1:
+				QuestManager.server_talk(peer_id, str(args[0]))
+		"quest_accept":
+			if args.size() == 1:
+				QuestManager.server_accept(peer_id, str(args[0]))
+		"quest_turn_in":
+			if args.size() == 1:
+				QuestManager.server_turn_in(peer_id, str(args[0]))
 		"drop":
 			if args.size() == 1:
 				var stack := inventory.take(int(args[0]))
@@ -382,6 +521,102 @@ func _give(peer_id: int, id: String, amount: int) -> void:
 		_notify_peer(peer_id, "Inventario lleno: %s x%d quedó en el suelo" % [ItemDB.item_name(id), leftover])
 
 
+## Recompensas de misiones: cada jugador conectado recibe todo.
+func give_to_all(items: Dictionary) -> void:
+	for peer_id in _inventories.keys():
+		for item: String in items:
+			_give(peer_id, item, int(items[item]))
+
+
+## Saca ítems del inventario de un jugador (entregas de misiones).
+func take_items(peer_id: int, items: Dictionary) -> bool:
+	var inventory: Inventory = _inventories.get(peer_id)
+	if inventory == null or not inventory.remove_items(items):
+		return false
+	_send_inventory(peer_id)
+	return true
+
+
+func notify_peer(peer_id: int, text: String) -> void:
+	_notify_peer(peer_id, text)
+
+
+# --- Fabricación ---------------------------------------------------------------------
+# Los materiales se descuentan al encargar; si se cancela, se devuelven.
+
+func _server_craft(peer_id: int, recipe_id: String, amount: int) -> void:
+	var recipe := RecipeDB.get_recipe(recipe_id)
+	var inventory: Inventory = _inventories.get(peer_id)
+	var player := players_root.get_node_or_null(str(peer_id))
+	if recipe.is_empty() or inventory == null or player == null or amount < 1:
+		return
+	var queue: Array = _craft_queues.get(peer_id, [])
+	if queue.size() >= MAX_CRAFT_QUEUE:
+		_notify_peer(peer_id, "La cola de fabricación está llena")
+		return
+	if recipe.has("station") and not is_near_station(player.sync_pos, recipe["station"]):
+		_notify_peer(peer_id, "Tenés que estar cerca de: %s" % RecipeDB.STATIONS[recipe["station"]])
+		return
+	var count := mini(amount, RecipeDB.max_craftable(recipe_id, inventory.slots))
+	if count <= 0:
+		_notify_peer(peer_id, "Te faltan materiales")
+		return
+	var ingredients: Dictionary = recipe["ingredients"]
+	for item: String in ingredients:
+		inventory.remove(item, int(ingredients[item]) * count)
+	queue.append({"recipe": recipe_id, "remaining": count, "time_left": recipe["time"], "time": recipe["time"]})
+	_craft_queues[peer_id] = queue
+	_send_inventory(peer_id)
+	_send_craft_queue(peer_id)
+
+
+func _server_craft_cancel(peer_id: int, index: int) -> void:
+	var queue: Array = _craft_queues.get(peer_id, [])
+	if index < 0 or index >= queue.size():
+		return
+	var job: Dictionary = queue[index]
+	queue.remove_at(index)
+	var ingredients: Dictionary = RecipeDB.get_recipe(job["recipe"])["ingredients"]
+	for item: String in ingredients:
+		_give(peer_id, item, int(ingredients[item]) * int(job["remaining"]))
+	_send_craft_queue(peer_id)
+
+
+func _update_crafting(delta: float) -> void:
+	for peer_id in _craft_queues.keys():
+		var queue: Array = _craft_queues[peer_id]
+		if queue.is_empty():
+			continue
+		var job: Dictionary = queue[0]
+		job["time_left"] -= delta
+		if job["time_left"] > 0.0:
+			continue
+		var recipe := RecipeDB.get_recipe(job["recipe"])
+		_give(peer_id, recipe["result"], recipe["amount"])
+		QuestManager.report_craft(recipe["result"], recipe["amount"])
+		job["remaining"] -= 1
+		if job["remaining"] > 0:
+			job["time_left"] = job["time"]
+		else:
+			queue.pop_front()
+		_send_craft_queue(peer_id)
+
+
+func _send_craft_queue(peer_id: int) -> void:
+	var data: Array = []
+	for job in _craft_queues.get(peer_id, []):
+		data.append(job.duplicate())
+	if peer_id == multiplayer.get_unique_id():
+		_receive_craft_queue(data)
+	else:
+		_receive_craft_queue.rpc_id(peer_id, data)
+
+
+@rpc("authority", "reliable")
+func _receive_craft_queue(queue: Array) -> void:
+	Game.set_craft_queue(queue)
+
+
 # --- Recolección ---------------------------------------------------------------------
 
 func _server_gather(peer_id: int, node_name: String) -> void:
@@ -402,7 +637,9 @@ func _server_gather(peer_id: int, node_name: String) -> void:
 	# La herramienta correcta en la mano rinde más.
 	var inventory: Inventory = _inventories[peer_id]
 	var held: String = inventory.get_slot(int(player.selected_slot)).get("id", "")
-	var amount := TOOL_MULTIPLIER if ItemDB.tool_type(held) == node.preferred_tool else 1
+	var amount := node.base_yield
+	if node.preferred_tool != "" and ItemDB.tool_type(held) == node.preferred_tool:
+		amount *= ItemDB.tool_power(held)
 
 	node.hits_left -= 1
 	_give(peer_id, node.resource_type, amount)

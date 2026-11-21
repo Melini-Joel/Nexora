@@ -4,10 +4,9 @@ extends CanvasLayer
 
 const InventoryUI := preload("res://scripts/ui/inventory_ui.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
+const DialogUI := preload("res://scripts/ui/dialog_ui.gd")
 
 var _root: Control
-var _quest_title: Label
-var _quest_description: Label
 var _quest_objectives: VBoxContainer
 var _players_label: Label
 var _hint: Label
@@ -39,6 +38,9 @@ func _ready() -> void:
 	Game.pause_toggled.connect(func(is_open: bool): _pause_overlay.visible = is_open)
 	Game.inventory_toggled.connect(func(is_open: bool): _crosshair.visible = not is_open)
 	QuestManager.quest_changed.connect(_refresh_quest)
+	Game.inventory_changed.connect(_refresh_quest)
+	Game.dialog_requested.connect(_open_dialog)
+	Game.dialog_closed.connect(func(): _crosshair.visible = true)
 	Network.players_changed.connect(_refresh_players)
 	Cinematics.started.connect(func(): _root.visible = false)
 	Cinematics.finished.connect(func(): _root.visible = true)
@@ -67,22 +69,17 @@ func _build_quest_panel() -> void:
 	var panel := UIStyle.panel()
 	panel.anchor_left = 1.0
 	panel.anchor_right = 1.0
-	panel.offset_left = -380
+	panel.offset_left = -400
 	panel.offset_right = -20
 	panel.offset_top = 20
 	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_root.add_child(panel)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
+	box.add_theme_constant_override("separation", 4)
 	panel.add_child(box)
-	box.add_child(UIStyle.label("MISIÓN", 13, UIStyle.TEXT_DIM))
-	_quest_title = UIStyle.label("", 22, UIStyle.ACCENT)
-	box.add_child(_quest_title)
-	_quest_description = UIStyle.label("", 15, UIStyle.TEXT_DIM)
-	_quest_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_quest_description.custom_minimum_size = Vector2(330, 0)
-	box.add_child(_quest_description)
+	box.add_child(UIStyle.label("MISIONES", 13, UIStyle.TEXT_DIM))
 	_quest_objectives = VBoxContainer.new()
+	_quest_objectives.add_theme_constant_override("separation", 3)
 	box.add_child(_quest_objectives)
 
 
@@ -197,33 +194,49 @@ func _on_inventory_changed() -> void:
 	_last_totals = totals
 
 
+## Lista de misiones activas con su progreso (máximo 4 a la vista).
 func _refresh_quest() -> void:
 	for child in _quest_objectives.get_children():
 		child.queue_free()
-	if QuestManager.is_finished():
-		_quest_title.text = "Demo completada"
-		_quest_description.text = "No hay más misiones por ahora. ¡Exploren la isla!"
+	var active := QuestManager.active_quests()
+	if active.is_empty():
+		var hint := UIStyle.label("Buscá a los habitantes con  !  sobre la cabeza para conseguir misiones.", 15, UIStyle.TEXT_DIM)
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.custom_minimum_size = Vector2(350, 0)
+		_quest_objectives.add_child(hint)
 		return
-	var quest := QuestManager.current_quest()
-	_quest_title.text = quest["title"]
-	_quest_description.text = quest["description"]
-	var objectives: Array = quest["objectives"]
-	for i in objectives.size():
-		var objective: Dictionary = objectives[i]
-		var current: int = QuestManager.progress[i] if i < QuestManager.progress.size() else 0
-		var done: bool = current >= objective["amount"]
-		var text: String
-		if objective["type"] == "collect":
-			text = "• %s: %d / %d" % [objective["text"], current, objective["amount"]]
-		else:
-			text = "• %s%s" % [objective["text"], " (hecho)" if done else ""]
-		_quest_objectives.add_child(UIStyle.label(text, 17, UIStyle.SUCCESS if done else UIStyle.TEXT))
+	for id in active.slice(0, 4):
+		var quest := QuestDB.get_quest(id)
+		_quest_objectives.add_child(UIStyle.label(quest["title"], 19, UIStyle.ACCENT))
+		if QuestManager.get_status(id) == "ready" and QuestManager.missing_delivery(id).is_empty():
+			_quest_objectives.add_child(UIStyle.label("  → Volvé con %s para entregarla" % NpcDB.display_name(quest.get("giver", "")), 15, UIStyle.SUCCESS))
+			continue
+		var objectives: Array = quest["objectives"]
+		for i in objectives.size():
+			var objective: Dictionary = objectives[i]
+			var current := QuestManager.objective_progress(id, i)
+			var done: bool = current >= objective["amount"]
+			var text: String
+			if objective["type"] in ["collect", "craft", "deliver"]:
+				text = "  • %s: %d / %d" % [objective["text"], current, objective["amount"]]
+			else:
+				text = "  • %s%s" % [objective["text"], " (hecho)" if done else ""]
+			_quest_objectives.add_child(UIStyle.label(text, 15, UIStyle.SUCCESS if done else UIStyle.TEXT))
+	if active.size() > 4:
+		_quest_objectives.add_child(UIStyle.label("  ... y %d más" % (active.size() - 4), 14, UIStyle.TEXT_DIM))
 
 
 func _process(_delta: float) -> void:
 	_fps_label.visible = Settings.get_value("show_fps")
 	if _fps_label.visible:
 		_fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
+
+
+func _open_dialog(npc_id: String) -> void:
+	_crosshair.visible = false
+	var dialog := DialogUI.new()
+	dialog.npc_id = npc_id
+	add_child(dialog)
 
 
 func _open_settings() -> void:

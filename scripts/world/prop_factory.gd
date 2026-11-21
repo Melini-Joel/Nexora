@@ -167,6 +167,7 @@ static func make_rock(rng: RandomNumberGenerator, is_ore: bool) -> ResourceNode:
 	visual.name = "Visual"
 	if is_ore:
 		node.setup("metal_ore", "roca con metal", "Picar", 5, "pickaxe")
+		node.base_yield = 1
 		_add_mesh(visual, blob_mesh(1.0, ORE_STONE, 0.22, variant), Vector3(0, 0.3, 0))
 		# Vetas de metal que brillan un poco.
 		for vein in [Vector3(0.55, 0.55, 0.3), Vector3(-0.4, 0.7, 0.45), Vector3(0.1, 0.5, -0.7), Vector3(-0.6, 0.35, -0.3)]:
@@ -253,4 +254,115 @@ static func make_campfire() -> StaticBody3D:
 	collision.shape = shape
 	collision.position.y = 0.2
 	root.add_child(collision)
+	return root
+
+
+# --- Estaciones y lugares de las misiones -----------------------------------------------
+
+static func _box_collision(parent: Node3D, size: Vector3, pos: Vector3) -> void:
+	var shape := BoxShape3D.new()
+	shape.size = size
+	var collision := CollisionShape3D.new()
+	collision.shape = shape
+	collision.position = pos
+	parent.add_child(collision)
+
+
+static func make_fiber_plant(rng: RandomNumberGenerator) -> ResourceNode:
+	var node := ResourceNode.new()
+	node.setup("fiber", "planta de fibra", "Arrancar", 1, "")
+	node.base_yield = 6
+	var visual := Node3D.new()
+	visual.name = "Visual"
+	var stalk_color := Color(0.72, 0.75, 0.32)
+	for i in 7:
+		var angle := TAU * i / 7.0 + rng.randf() * 0.4
+		var radius := rng.randf_range(0.05, 0.22)
+		var blade := _add_mesh(visual, cone_mesh(0.06, 1.1, stalk_color), Vector3(cos(angle) * radius, 0.5, sin(angle) * radius))
+		blade.rotation = Vector3(sin(angle) * 0.25, 0, -cos(angle) * 0.25)
+		blade.scale.y = rng.randf_range(0.8, 1.3)
+	_add_mesh(visual, blob_mesh(0.09, Color(0.9, 0.85, 0.5), 0.02, 0), Vector3(0, 1.1, 0))
+	node.add_child(visual)
+	node.visual = visual
+	var shape := CylinderShape3D.new()
+	shape.radius = 0.35
+	shape.height = 1.2
+	var collision := CollisionShape3D.new()
+	collision.shape = shape
+	collision.position.y = 0.6
+	node.add_child(collision)
+	return node
+
+
+static func make_workbench() -> StaticBody3D:
+	var root := StaticBody3D.new()
+	root.name = "Workbench"
+	var wood := Color(0.55, 0.38, 0.22)
+	_add_mesh(root, box_mesh(Vector3(1.9, 0.12, 0.85), wood), Vector3(0, 0.88, 0))
+	for x in [-0.8, 0.8]:
+		for z in [-0.32, 0.32]:
+			_add_mesh(root, box_mesh(Vector3(0.12, 0.85, 0.12), wood.darkened(0.2)), Vector3(x, 0.42, z))
+	_add_mesh(root, box_mesh(Vector3(1.7, 0.06, 0.6), wood.darkened(0.25)), Vector3(0, 0.25, 0))
+	# Herramientas y materiales sobre la mesa.
+	_add_mesh(root, box_mesh(Vector3(0.5, 0.06, 0.06), BARK), Vector3(-0.4, 0.97, 0.1), Vector3(0, 0.4, 0))
+	_add_mesh(root, box_mesh(Vector3(0.1, 0.16, 0.06), STONE), Vector3(-0.2, 1.0, 0.0))
+	_add_mesh(root, box_mesh(Vector3(0.35, 0.2, 0.25), Color(0.6, 0.45, 0.3)), Vector3(0.55, 1.04, -0.1))
+	_box_collision(root, Vector3(1.9, 0.95, 0.85), Vector3(0, 0.47, 0))
+	return root
+
+
+static func make_furnace() -> StaticBody3D:
+	var root := StaticBody3D.new()
+	root.name = "Furnace"
+	_add_mesh(root, blob_mesh(1.0, STONE.darkened(0.15), 0.08, 2), Vector3(0, 0.7, 0)).scale = Vector3(1.0, 1.1, 1.0)
+	_add_mesh(root, box_mesh(Vector3(0.5, 1.3, 0.5), STONE.darkened(0.25)), Vector3(0.2, 1.9, 0.25))
+	var opening := _add_mesh(root, box_mesh(Vector3(0.55, 0.4, 0.1), FIRE, 3.0), Vector3(0, 0.55, -0.92))
+	opening.name = "Opening"
+	var light := OmniLight3D.new()
+	light.light_color = FIRE
+	light.light_energy = 1.8
+	light.omni_range = 6.0
+	light.position = Vector3(0, 0.7, -1.4)
+	root.add_child(light)
+	_box_collision(root, Vector3(1.8, 1.6, 1.8), Vector3(0, 0.8, 0))
+	return root
+
+
+static func make_anvil() -> StaticBody3D:
+	var root := StaticBody3D.new()
+	var metal := Color(0.25, 0.26, 0.3)
+	_add_mesh(root, box_mesh(Vector3(0.35, 0.5, 0.35), BARK), Vector3(0, 0.25, 0))
+	_add_mesh(root, box_mesh(Vector3(0.3, 0.15, 0.25), metal), Vector3(0, 0.57, 0))
+	_add_mesh(root, box_mesh(Vector3(0.6, 0.12, 0.25), metal), Vector3(0.05, 0.7, 0))
+	_box_collision(root, Vector3(0.6, 0.8, 0.4), Vector3(0, 0.4, 0))
+	return root
+
+
+## Muelle de madera que entra al agua (hacia -Z local).
+static func make_dock(length: float) -> StaticBody3D:
+	var root := StaticBody3D.new()
+	root.name = "Dock"
+	var wood := Color(0.5, 0.36, 0.22)
+	var planks := int(length / 0.5)
+	for i in planks:
+		var shade := wood.darkened(0.08 * (i % 3))
+		_add_mesh(root, box_mesh(Vector3(2.2, 0.1, 0.45), shade), Vector3(0, 0.0, -i * 0.5))
+	for i in range(0, planks, 4):
+		for x in [-1.0, 1.0]:
+			_add_mesh(root, cone_mesh(0.12, 3.0, wood.darkened(0.3)), Vector3(x, -1.2, -i * 0.5))
+	_box_collision(root, Vector3(2.2, 0.2, planks * 0.5), Vector3(0, -0.05, -planks * 0.25 + 0.25))
+	return root
+
+
+## Mirador: pila de piedras con una bandera.
+static func make_cairn() -> StaticBody3D:
+	var root := StaticBody3D.new()
+	root.name = "Cairn"
+	_add_mesh(root, blob_mesh(0.8, STONE, 0.15, 1), Vector3(0, 0.3, 0))
+	_add_mesh(root, blob_mesh(0.55, STONE.darkened(0.1), 0.12, 2), Vector3(0.1, 0.95, 0))
+	_add_mesh(root, blob_mesh(0.35, STONE, 0.08, 3), Vector3(-0.05, 1.4, 0.05))
+	_add_mesh(root, box_mesh(Vector3(0.07, 2.4, 0.07), BARK), Vector3(0, 2.6, 0))
+	var flag := _add_mesh(root, box_mesh(Vector3(0.9, 0.5, 0.03), Color(0.8, 0.2, 0.15)), Vector3(0.47, 3.5, 0))
+	flag.name = "Flag"
+	_box_collision(root, Vector3(1.4, 1.6, 1.4), Vector3(0, 0.8, 0))
 	return root

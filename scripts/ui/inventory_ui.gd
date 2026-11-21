@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Inventario estilo survival: barra rápida siempre visible abajo, indicador de carga, y con
 ## Tab se abre la mochila (grilla de 6x4) encima de la barra, más un panel de detalles.
 
+const CraftingPanel := preload("res://scripts/ui/crafting_panel.gd")
 const GAP := 6.0
 const COLUMNS := 6
 
@@ -15,6 +16,9 @@ var _speed_label: Label
 var _details_name: Label
 var _details_description: Label
 var _details_stats: Label
+var _queue_panel: PanelContainer
+var _queue_box: VBoxContainer
+var _queue_progress: ProgressBar
 
 
 ## Zona invisible detrás del inventario: soltar un objeto acá lo tira al suelo.
@@ -48,10 +52,13 @@ func _ready() -> void:
 
 	_build_main_grid(row_width)
 	_build_details_panel(row_width)
+	_build_crafting_panel(row_width)
 	_build_hotbar(row_width)
 	_build_weight_panel(row_width)
+	_build_queue_panel(row_width)
 
 	Game.inventory_changed.connect(_refresh)
+	Game.craft_queue_changed.connect(_refresh_queue)
 	Game.selected_slot_changed.connect(func(_i: int): _refresh())
 	Game.inventory_toggled.connect(_on_inventory_toggled)
 	Cinematics.started.connect(func(): visible = false)
@@ -155,6 +162,64 @@ func _build_weight_panel(row_width: float) -> void:
 	box.add_child(_speed_label)
 
 
+func _build_crafting_panel(row_width: float) -> void:
+	var panel := UIStyle.panel(Color(0.08, 0.09, 0.09, 0.88), 12)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var bottom := -20 - ItemSlot.SLOT_SIZE - 14
+	_bottom_center(panel, -row_width / 2 - 384, -row_width / 2 - 24, bottom - 360, bottom, Control.GROW_DIRECTION_BEGIN)
+	_window.add_child(panel)
+	panel.add_child(CraftingPanel.new())
+
+
+## Cola de fabricación: a la izquierda de la barra rápida, visible mientras se fabrica algo.
+func _build_queue_panel(row_width: float) -> void:
+	_queue_panel = UIStyle.panel(Color(0.08, 0.09, 0.09, 0.82), 10)
+	_queue_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_bottom_center(_queue_panel, -row_width / 2 - 254, -row_width / 2 - 24, -20 - ItemSlot.SLOT_SIZE, -20, Control.GROW_DIRECTION_BEGIN)
+	_queue_panel.visible = false
+	add_child(_queue_panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	_queue_panel.add_child(box)
+	box.add_child(UIStyle.label("Fabricando", 14, UIStyle.ACCENT))
+	_queue_progress = ProgressBar.new()
+	_queue_progress.show_percentage = false
+	_queue_progress.custom_minimum_size = Vector2(210, 8)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = UIStyle.ACCENT
+	fill.set_corner_radius_all(3)
+	var background := StyleBoxFlat.new()
+	background.bg_color = Color(0.2, 0.2, 0.2)
+	background.set_corner_radius_all(3)
+	_queue_progress.add_theme_stylebox_override("fill", fill)
+	_queue_progress.add_theme_stylebox_override("background", background)
+	box.add_child(_queue_progress)
+	_queue_box = VBoxContainer.new()
+	box.add_child(_queue_box)
+
+
+func _refresh_queue() -> void:
+	_queue_panel.visible = not Game.craft_queue.is_empty()
+	for child in _queue_box.get_children():
+		child.queue_free()
+	for i in Game.craft_queue.size():
+		var job: Dictionary = Game.craft_queue[i]
+		var button := Button.new()
+		button.flat = true
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.text = "%s  x%d" % [RecipeDB.display_name(job["recipe"]), job["remaining"]]
+		button.tooltip_text = "Click para cancelar (se devuelven los materiales)"
+		button.add_theme_font_size_override("font_size", 14)
+		button.pressed.connect(func(): Game.send_action("craft_cancel", [i]))
+		_queue_box.add_child(button)
+
+
+func _process(_delta: float) -> void:
+	if not Game.craft_queue.is_empty():
+		var job: Dictionary = Game.craft_queue[0]
+		_queue_progress.value = 100.0 * (1.0 - job["time_left"] / maxf(job["time"], 0.01))
+
+
 func _refresh() -> void:
 	for slot in _hotbar_slots:
 		slot.selected = slot.index == Game.selected_slot
@@ -164,7 +229,7 @@ func _refresh() -> void:
 
 	var ratio := Game.load_ratio()
 	_weight_bar.value = ratio
-	_weight_label.text = "Mochila  %.1f / %.0f kg" % [Game.carried_weight(), Inventory.CAPACITY_KG]
+	_weight_label.text = "Mochila  %.1f / %.0f kg" % [Game.carried_weight(), Game.capacity()]
 	if ratio > 1.0:
 		_weight_fill.bg_color = Color(0.9, 0.3, 0.25)
 		_speed_label.text = "¡SOBRECARGADO! Velocidad %d%%" % roundi(Game.speed_multiplier() * 100)

@@ -37,6 +37,7 @@ func _on_host_pressed(player_name: String) -> void:
 	QuestManager.reset()
 	_enter_world(Network.world_seed, {})
 	Network.add_host_player()
+	QuestManager.server_start()
 
 
 func _on_join_pressed(player_name: String, address: String) -> void:

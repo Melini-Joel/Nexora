@@ -10,12 +10,18 @@ signal local_player_spawned(player: Node)
 signal world_generated
 signal pause_toggled(is_open: bool)
 signal quit_to_menu_requested
+signal craft_queue_changed
+signal dialog_requested(npc_id: String)
+signal dialog_closed
 
 ## Copia local del inventario (la verdad la tiene el servidor).
 var inventory: Array = []
 var selected_slot := 0
 var inventory_open := false
 var ui_open := false  ## Menú de pausa abierto.
+var dialog_open := false  ## Hablando con un NPC.
+## Cola de fabricación local: [{recipe, remaining, time_left, time}]
+var craft_queue: Array = []
 var local_player: Node = null
 ## Mensaje para mostrar en el menú después de volver (p. ej. "se cayó la conexión").
 var pending_menu_message := ""
@@ -49,8 +55,37 @@ func carried_weight() -> float:
 	return Inventory.weight_of(inventory)
 
 
+func capacity() -> float:
+	return Inventory.capacity_for(inventory)
+
+
 func load_ratio() -> float:
-	return carried_weight() / Inventory.CAPACITY_KG
+	return carried_weight() / capacity()
+
+
+func set_craft_queue(queue: Array) -> void:
+	craft_queue = queue
+	craft_queue_changed.emit()
+
+
+func _process(delta: float) -> void:
+	# Cuenta regresiva local de la fabricación (solo para mostrar la barra de progreso).
+	if not craft_queue.is_empty():
+		craft_queue[0]["time_left"] = maxf(0.0, craft_queue[0]["time_left"] - delta)
+
+
+func open_dialog(npc_id: String) -> void:
+	dialog_open = true
+	if inventory_open:
+		set_inventory_open(false)
+	_update_mouse()
+	dialog_requested.emit(npc_id)
+
+
+func close_dialog() -> void:
+	dialog_open = false
+	_update_mouse()
+	dialog_closed.emit()
 
 
 func speed_multiplier() -> float:
@@ -72,7 +107,7 @@ func send_action(action: String, args: Array = []) -> void:
 
 ## ¿Se puede mover el personaje? (con el inventario abierto también se puede, como en los survival).
 func can_control_player() -> bool:
-	return not ui_open and not Cinematics.playing
+	return not ui_open and not dialog_open and not Cinematics.playing
 
 
 ## ¿Se puede mirar con el mouse, golpear y recoger?
@@ -95,7 +130,7 @@ func set_pause_open(is_open: bool) -> void:
 
 
 func _update_mouse() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if (ui_open or inventory_open) else Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if (ui_open or inventory_open or dialog_open) else Input.MOUSE_MODE_CAPTURED
 
 
 func reset() -> void:
@@ -103,6 +138,8 @@ func reset() -> void:
 	selected_slot = 0
 	inventory_open = false
 	ui_open = false
+	dialog_open = false
+	craft_queue = []
 	local_player = null
 
 

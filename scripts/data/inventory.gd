@@ -30,6 +30,23 @@ static func weight_of(slot_array: Array) -> float:
 	return total
 
 
+## Capacidad de carga (la mochila grande suma kilos extra).
+static func capacity_for(slot_array: Array) -> float:
+	var bonus := 0.0
+	for slot in slot_array:
+		if not slot.is_empty():
+			bonus = maxf(bonus, ItemDB.get_item(slot["id"]).get("capacity_bonus", 0.0))
+	return CAPACITY_KG + bonus
+
+
+static func count_in(slot_array: Array, id: String) -> int:
+	var total := 0
+	for slot in slot_array:
+		if slot.get("id", "") == id:
+			total += slot["count"]
+	return total
+
+
 ## Multiplicador de velocidad según cuánto pesa la mochila (0..1+ de la capacidad).
 static func speed_multiplier_for(load_ratio: float) -> float:
 	if load_ratio <= 0.4:
@@ -158,3 +175,41 @@ func take(index: int) -> Dictionary:
 		return {}
 	slots[index] = {}
 	return slot
+
+
+func count(id: String) -> int:
+	return count_in(slots, id)
+
+
+func has_items(items: Dictionary) -> bool:
+	for id: String in items:
+		if count(id) < int(items[id]):
+			return false
+	return true
+
+
+## Saca ítems (primero de la mochila, al final de la barra rápida). Devuelve false si no alcanzan.
+func remove(id: String, amount: int) -> bool:
+	if count(id) < amount:
+		return false
+	var order: Array = range(SIZE - 1, -1, -1)
+	for i in order:
+		var slot: Dictionary = slots[i]
+		if slot.get("id", "") != id:
+			continue
+		var n := mini(amount, slot["count"])
+		slot["count"] -= n
+		amount -= n
+		if slot["count"] <= 0:
+			slots[i] = {}
+		if amount == 0:
+			break
+	return true
+
+
+func remove_items(items: Dictionary) -> bool:
+	if not has_items(items):
+		return false
+	for id: String in items:
+		remove(id, int(items[id]))
+	return true

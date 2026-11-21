@@ -28,6 +28,12 @@ properties/5/replication_mode = 2
 properties/6/path = NodePath(".:load_ratio")
 properties/6/spawn = true
 properties/6/replication_mode = 2
+properties/7/path = NodePath(".:grounded")
+properties/7/spawn = true
+properties/7/replication_mode = 2
+properties/8/path = NodePath(".:busy")
+properties/8/spawn = true
+properties/8/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_player")

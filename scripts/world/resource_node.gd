@@ -6,7 +6,8 @@ extends StaticBody3D
 var resource_type := "wood"
 var display_name := "árbol"
 var action_name := "Talar"
-var preferred_tool := "hatchet"  ## Herramienta que rinde más con este recurso.
+var preferred_tool := "hatchet"  ## Herramienta que rinde más con este recurso ("" = a mano).
+var base_yield := 2  ## Cuánto da cada golpe a mano.
 var max_hits := 5
 var hits_left := 5
 var depleted := false
