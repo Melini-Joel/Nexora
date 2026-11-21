@@ -17,6 +17,7 @@ var player_name := "Jugador"
 ## peer_id -> {"name": String}
 var players: Dictionary = {}
 var world_seed := 0
+var is_solo := false  ## Partida individual: nadie más se puede unir.
 
 
 func _ready() -> void:
@@ -26,16 +27,25 @@ func _ready() -> void:
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
 
-func host_game(port: int = DEFAULT_PORT) -> Error:
-	var peer := ENetMultiplayerPeer.new()
-	# El host ocupa un lugar, así que aceptamos MAX_PLAYERS - 1 clientes.
-	var err := peer.create_server(port, MAX_PLAYERS - 1)
-	if err != OK:
-		return err
-	multiplayer.multiplayer_peer = peer
-	randomize()
-	world_seed = randi()
-	return OK
+func host_game(port: int = DEFAULT_PORT, solo: bool = false) -> Error:
+	# En modo solo el servidor escucha solo en esta PC y no acepta a nadie más
+	# (así no aparece el aviso del firewall). Si el puerto está ocupado, prueba los siguientes.
+	var err := ERR_CANT_CREATE
+	for attempt in (10 if solo else 1):
+		var peer := ENetMultiplayerPeer.new()
+		if solo:
+			peer.set_bind_ip("127.0.0.1")
+		# El host ocupa un lugar, así que aceptamos MAX_PLAYERS - 1 clientes.
+		err = peer.create_server(port + attempt, 1 if solo else MAX_PLAYERS - 1)
+		if err == OK:
+			if solo:
+				peer.refuse_new_connections = true
+			multiplayer.multiplayer_peer = peer
+			is_solo = solo
+			randomize()
+			world_seed = randi()
+			return OK
+	return err
 
 
 ## Se llama después de generar el mundo en el host.
@@ -57,6 +67,7 @@ func leave_game() -> void:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	players.clear()
+	is_solo = false
 
 
 func is_online() -> bool:

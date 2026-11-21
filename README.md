@@ -3,6 +3,8 @@
 RPG cooperativo de mundo abierto en 3D (2 a 6 jugadores) hecho con **Godot 4.3+** y **GDScript**.
 Estilo low-poly: liviano para cualquier PC, pero con iluminación, sombras, niebla y brillo.
 
+![Menú principal](docs/21_menu.png)
+
 ![Construcción y animales](docs/17_construccion_animales.png)
 
 ![Noche con sombras](docs/18_noche_sombras.png)
@@ -11,7 +13,23 @@ Estilo low-poly: liviano para cualquier PC, pero con iluminación, sombras, nieb
 
 1. Descargá Godot 4.3 o superior (versión estándar, **no** la .NET): https://godotengine.org/download
 2. Abrí Godot → **Importar** → elegí el archivo `project.godot` de esta carpeta.
-3. Apretá **F5** para jugar → **Crear partida**.
+3. Apretá **F5**. En el menú elegí **Jugar solo** o **Multijugador** (crear partida o unirse por IP).
+
+## Cómo actualizar a una versión nueva (sin borrar ni volver a importar)
+
+**Opción A: reemplazar archivos (la más simple)**
+1. Descomprimí el zip nuevo.
+2. Copiá el **contenido** de la carpeta `nexora` nueva y pegalo **encima** de tu carpeta `nexora`. Cuando Windows pregunte, elegí **Reemplazar los archivos en el destino**.
+3. Volvé a Godot: detecta los cambios solo. Si pregunta "¿Recargar desde el disco?", tocá **Recargar**.
+
+No borres la carpeta oculta `.godot` (es la caché del editor) ni tus opciones guardadas: se conservan.
+
+**Opción B: GitHub + GitHub Desktop (la mejor a largo plazo)**
+1. Creá una cuenta en github.com e instalá **GitHub Desktop**.
+2. Subí el proyecto a un repositorio (o clonalo si ya está subido).
+3. Cada vez que haya una versión nueva: en GitHub Desktop tocá **Fetch origin** y después **Pull origin**. Los archivos se actualizan solos y Godot los recarga.
+
+Además tenés el historial de cada versión: si algo se rompe, podés volver atrás.
 
 ## Opciones (menú principal o Esc → Opciones)
 

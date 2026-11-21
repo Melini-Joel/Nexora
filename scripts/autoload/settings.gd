@@ -18,6 +18,8 @@ const DEFAULTS := {
 	"mouse_sensitivity": 1.0,
 	"invert_y": false,
 	"quality": "medium",
+	"player_name": "",
+	"last_ip": "127.0.0.1",
 }
 const WINDOW_MODES := {"windowed": "Ventana", "maximized": "Ventana maximizada", "fullscreen": "Pantalla completa"}
 const QUALITY_LEVELS := {"low": "Baja (más FPS)", "medium": "Media", "high": "Alta"}

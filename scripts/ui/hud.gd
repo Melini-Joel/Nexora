@@ -392,7 +392,10 @@ func _open_settings() -> void:
 
 
 func _refresh_players() -> void:
-	_players_label.text = "Jugadores: %d / %d" % [Network.players.size(), Network.MAX_PLAYERS]
+	if Network.is_solo:
+		_players_label.text = "Partida individual"
+	else:
+		_players_label.text = "Jugadores: %d / %d" % [Network.players.size(), Network.MAX_PLAYERS]
 
 
 func show_notification(text: String) -> void:
