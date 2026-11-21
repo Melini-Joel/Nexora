@@ -40,18 +40,19 @@ static func material(color: Color, emission_energy: float = 0.0) -> StandardMate
 	return mat
 
 
-## Material compartido para todas las mallas con colores por vértice.
-static func vertex_material() -> StandardMaterial3D:
+## Material compartido para todas las mallas con colores por vértice (con viento para las hojas).
+static func vertex_material() -> ShaderMaterial:
 	if not _cache.has("vertex_mat"):
-		var mat := StandardMaterial3D.new()
-		mat.vertex_color_use_as_albedo = true
-		mat.roughness = 0.9
+		var mat := ShaderMaterial.new()
+		mat.shader = load("res://shaders/props.gdshader")
 		_cache["vertex_mat"] = mat
 	return _cache["vertex_mat"]
 
 
-## Junta varias piezas en una sola malla facetada con colores por vértice.
-## Cada pieza: [PrimitiveMesh, Transform3D, Color, jitter (opcional), semilla (opcional)]
+## Junta varias piezas en una sola malla con colores por vértice.
+## Cada pieza: [PrimitiveMesh, Transform3D, Color, jitter, semilla, viento, suave]
+##   jitter/semilla: deforma los vértices (rocas, copas) · viento: 0..1 cuánto se mece
+##   suave: sombreado redondeado (copas de árboles) en vez de facetado
 static func combine(parts: Array) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -61,6 +62,9 @@ static func combine(parts: Array) -> ArrayMesh:
 		var color: Color = (part[2] as Color).srgb_to_linear()
 		var jitter: float = part[3] if part.size() > 3 else 0.0
 		var jitter_seed: int = part[4] if part.size() > 4 else 0
+		color.a = part[5] if part.size() > 5 else 0.0
+		var smooth: bool = part[6] if part.size() > 6 else false
+		var center := xf.origin
 		var arrays := source.get_mesh_arrays()
 		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
@@ -81,9 +85,15 @@ static func combine(parts: Array) -> ArrayMesh:
 			if normal.length_squared() < 0.0000001:
 				continue
 			normal = normal.normalized()
-			for v in [a, b, c]:
+			for v: Vector3 in [a, b, c]:
 				st.set_color(color)
-				st.set_normal(normal)
+				if smooth:
+					# Normal hacia afuera y un poco hacia arriba: las copas se ven redondeadas y
+					# reciben luz de abajo (como las hojas reales, que dejan pasar la luz).
+					var outward := ((v - center).normalized() + Vector3(0, 0.45, 0)).normalized()
+					st.set_normal(outward.lerp(normal, 0.25).normalized())
+				else:
+					st.set_normal(normal)
 				st.add_vertex(v)
 	st.set_material(vertex_material())
 	return st.commit()
@@ -192,19 +202,45 @@ static func tree_mesh(kind: String, variant: int) -> Mesh:
 	var key := "tree_%s_%d" % [kind, variant]
 	if _cache.has(key):
 		return _cache[key]
-	var parts: Array = [[cylinder(0.16, 0.26, 2.4, 6), _at(Vector3(0, 1.2, 0)), BARK]]
+	var parts: Array = []
 	match kind:
 		"pine", "snow_pine":
+			parts.append([cylinder(0.16, 0.26, 2.4, 8), _at(Vector3(0, 1.2, 0)), BARK, 0.0, 0, 0.15, true])
 			var leaves: Color = LEAVES[variant % LEAVES.size()]
-			for layer in [[1.5, 2.2, 2.6], [1.1, 1.9, 3.6], [0.7, 1.4, 4.5]]:
-				parts.append([cylinder(0.0, layer[0], layer[1]), _at(Vector3(0, layer[2], 0)), leaves])
+			for layer in [[1.55, 2.2, 2.6], [1.15, 1.9, 3.55], [0.75, 1.45, 4.45], [0.4, 0.9, 5.15]]:
+				parts.append([cylinder(0.0, layer[0], layer[1], 9), _at(Vector3(0, layer[2], 0)), leaves.darkened(0.04 * (layer[2] - 2.6)), 0.06, variant, 1.0, true])
 				if kind == "snow_pine":
-					parts.append([cylinder(0.0, layer[0] * 0.75, layer[1] * 0.45), _at(Vector3(0, layer[2] + layer[1] * 0.3, 0)), SNOW])
+					parts.append([cylinder(0.0, layer[0] * 0.78, layer[1] * 0.42), _at(Vector3(0, layer[2] + layer[1] * 0.32, 0)), SNOW, 0.0, 0, 1.0, true])
 		"round":
+			parts.append([cylinder(0.17, 0.27, 2.6, 8), _at(Vector3(0, 1.3, 0)), BARK, 0.0, 0, 0.15, true])
 			var leaves: Color = ROUND_LEAVES[variant % ROUND_LEAVES.size()]
-			parts.append([sphere(1.5, 2.4), _at(Vector3(0, 3.2, 0)), leaves, 0.18, variant * 31 + 1])
-			parts.append([sphere(0.9, 1.44), _at(Vector3(0.7, 3.9, 0.3)), leaves.lightened(0.06), 0.12, variant * 31 + 2])
-			parts.append([sphere(0.8, 1.3), _at(Vector3(-0.6, 3.6, -0.4)), leaves.darkened(0.06), 0.1, variant * 31 + 3])
+			parts.append([sphere(1.5, 2.4, 10, 6), _at(Vector3(0, 3.2, 0)), leaves, 0.2, variant * 31 + 1, 1.0, true])
+			parts.append([sphere(0.95, 1.5, 9, 5), _at(Vector3(0.75, 3.9, 0.3)), leaves.lightened(0.06), 0.14, variant * 31 + 2, 1.0, true])
+			parts.append([sphere(0.85, 1.35, 9, 5), _at(Vector3(-0.65, 3.6, -0.45)), leaves.darkened(0.06), 0.12, variant * 31 + 3, 1.0, true])
+		"birch":
+			var bark := Color(0.9, 0.88, 0.82)
+			parts.append([cylinder(0.11, 0.16, 4.2, 8), _at(Vector3(0, 2.1, 0)), bark, 0.0, 0, 0.2, true])
+			for i in 5:  # Manchas oscuras de la corteza.
+				parts.append([box(Vector3(0.12, 0.05, 0.04)), _at(Vector3(0.1 * (1 if i % 2 == 0 else -1), 0.8 + i * 0.65, 0.09), Vector3(0, i, 0)), Color(0.15, 0.14, 0.13), 0.0, 0, 0.2])
+			var leaves := Color(0.52, 0.72, 0.3).darkened(0.05 * variant)
+			parts.append([sphere(1.0, 2.2, 9, 6), _at(Vector3(0, 4.6, 0)), leaves, 0.16, variant + 40, 1.0, true])
+			parts.append([sphere(0.7, 1.4, 8, 5), _at(Vector3(0.45, 5.4, 0.2)), leaves.lightened(0.07), 0.12, variant + 41, 1.0, true])
+			parts.append([sphere(0.65, 1.2, 8, 5), _at(Vector3(-0.4, 3.9, -0.3)), leaves.darkened(0.05), 0.1, variant + 42, 1.0, true])
+		"oak":
+			parts.append([cylinder(0.28, 0.45, 2.4, 9), _at(Vector3(0, 1.2, 0)), BARK.darkened(0.1), 0.03, variant, 0.1, true])
+			parts.append([cylinder(0.12, 0.2, 1.8, 6), _at(Vector3(0.6, 2.6, 0), Vector3(0, 0, -0.7)), BARK.darkened(0.1), 0.0, 0, 0.3, true])
+			parts.append([cylinder(0.12, 0.2, 1.8, 6), _at(Vector3(-0.55, 2.7, 0.2), Vector3(0.2, 0, 0.7)), BARK.darkened(0.1), 0.0, 0, 0.3, true])
+			var leaves := Color(0.27, 0.48, 0.2).lightened(0.04 * variant)
+			for blob in [[Vector3(0, 4.0, 0), 2.0], [Vector3(1.5, 3.6, 0.4), 1.4], [Vector3(-1.4, 3.7, -0.3), 1.4],
+					[Vector3(0.3, 4.6, 1.2), 1.2], [Vector3(-0.2, 4.5, -1.3), 1.2]]:
+				var r: float = blob[1]
+				parts.append([sphere(r, r * 1.5, 10, 6), _at(blob[0]), leaves.darkened(0.03 * r), 0.22, variant * 17 + int(r * 10), 1.0, true])
+		"dead":
+			var wood := Color(0.42, 0.36, 0.3)
+			parts.append([cylinder(0.12, 0.22, 3.4, 7), _at(Vector3(0, 1.7, 0)), wood, 0.02, variant, 0.0, true])
+			for branch in [[Vector3(0.45, 2.6, 0), Vector3(0, 0, -0.8), 1.4], [Vector3(-0.4, 3.0, 0.2), Vector3(0.3, 0, 0.9), 1.2],
+					[Vector3(0.1, 3.4, -0.4), Vector3(-0.8, 0.4, 0), 1.0], [Vector3(0.3, 3.6, 0.3), Vector3(0.6, 0, -0.5), 0.8]]:
+				parts.append([cylinder(0.03, 0.08, branch[2], 5), _at(branch[0], branch[1]), wood.darkened(0.1), 0.0, 0, 0.0, true])
 	_cache[key] = combine(parts)
 	return _cache[key]
 
@@ -212,6 +248,8 @@ static func tree_mesh(kind: String, variant: int) -> Mesh:
 static func make_tree(rng: RandomNumberGenerator, kind: String) -> ResourceNode:
 	var variant := rng.randi() % 3
 	var s := rng.randf_range(0.8, 1.35)
+	if kind == "oak":
+		s *= 1.25
 	var node := ResourceNode.new()
 	node.setup("wood", "árbol", "Talar", 5, "hatchet")
 	node.visual = _visual(node, tree_mesh(kind, variant), FAR)
@@ -286,7 +324,7 @@ static func make_fiber_plant(rng: RandomNumberGenerator) -> ResourceNode:
 			var radius := r.randf_range(0.05, 0.22)
 			var tilt := Vector3(sin(angle) * 0.25, 0, -cos(angle) * 0.25)
 			parts.append([cylinder(0.0, 0.06, 1.1, 4), _at(Vector3(cos(angle) * radius, 0.5, sin(angle) * radius), tilt,
-				Vector3(1, r.randf_range(0.8, 1.3), 1)), stalk.darkened(r.randf() * 0.15)])
+				Vector3(1, r.randf_range(0.8, 1.3), 1)), stalk.darkened(r.randf() * 0.15), 0.0, 0, 1.0])
 		parts.append([sphere(0.09, 0.14), _at(Vector3(0, 1.1, 0)), Color(0.9, 0.85, 0.5)])
 		_cache[key] = combine(parts)
 	var node := ResourceNode.new()
@@ -301,7 +339,7 @@ static func make_berry_bush(rng: RandomNumberGenerator) -> ResourceNode:
 	var variant := rng.randi() % 3
 	var key := "berry_%d" % variant
 	if not _cache.has(key):
-		var parts: Array = [[sphere(0.7, 1.0), _at(Vector3(0, 0.45, 0)), Color(0.25, 0.48, 0.22), 0.1, variant]]
+		var parts: Array = [[sphere(0.7, 1.0, 10, 6), _at(Vector3(0, 0.45, 0)), Color(0.25, 0.48, 0.22), 0.1, variant, 0.6, true]]
 		var r := RandomNumberGenerator.new()
 		r.seed = variant + 200
 		for i in 10:
@@ -527,3 +565,74 @@ static func make_shipwreck() -> StaticBody3D:
 	_box_collision(root, Vector3(4.4, 2.6, 8.5), Vector3(0, 0.6, -3.5))
 	_box_collision(root, Vector3(4.2, 2.2, 6.0), Vector3(2.5, 0.3, 7.0))
 	return root
+
+
+# --- Vegetación decorativa (ver decor_field.gd) -------------------------------------------
+
+static func decor_mesh(type: String) -> Mesh:
+	var key := "decor_" + type
+	if _cache.has(key):
+		return _cache[key]
+	var parts: Array = []
+	var r := RandomNumberGenerator.new()
+	r.seed = hash(type)
+	match type:
+		"fern":
+			for i in 8:
+				var angle := TAU * i / 8.0 + r.randf() * 0.3
+				var length := r.randf_range(0.55, 0.85)
+				var dir := Vector3(sin(angle), 0, cos(angle))
+				parts.append([box(Vector3(0.16, 0.02, length)), _at(dir * length * 0.42 + Vector3(0, 0.22, 0), Vector3(-0.5, angle, 0)),
+					Color(0.2, 0.42, 0.18).lightened(r.randf() * 0.08), 0.0, 0, 1.0])
+		"flower_white", "flower_yellow", "flower_purple", "flower_red":
+			var petal: Color = {"flower_white": Color(0.95, 0.95, 0.92), "flower_yellow": Color(1.0, 0.85, 0.25),
+				"flower_purple": Color(0.6, 0.4, 0.85), "flower_red": Color(0.9, 0.2, 0.22)}[type]
+			for i in 4:
+				var offset := Vector3(r.randf_range(-0.2, 0.2), 0, r.randf_range(-0.2, 0.2))
+				var height := r.randf_range(0.25, 0.45)
+				parts.append([cylinder(0.012, 0.015, height, 4), _at(offset + Vector3(0, height / 2, 0)), Color(0.3, 0.55, 0.22), 0.0, 0, 1.0])
+				parts.append([sphere(0.06, 0.04, 6, 2), _at(offset + Vector3(0, height, 0)), petal, 0.0, 0, 1.0])
+				parts.append([sphere(0.022, 0.03, 5, 2), _at(offset + Vector3(0, height + 0.015, 0)), Color(1.0, 0.8, 0.2), 0.0, 0, 1.0])
+		"mushroom":
+			for i in 3:
+				var offset := Vector3(r.randf_range(-0.18, 0.18), 0, r.randf_range(-0.18, 0.18))
+				var height := r.randf_range(0.08, 0.18)
+				parts.append([cylinder(0.025, 0.03, height, 6), _at(offset + Vector3(0, height / 2, 0)), Color(0.92, 0.9, 0.82), 0.0, 0, 0.0, true])
+				var cap := Color(0.75, 0.2, 0.15) if i == 0 else Color(0.55, 0.38, 0.25)
+				var hemi := SphereMesh.new()
+				hemi.radius = r.randf_range(0.06, 0.1)
+				hemi.height = hemi.radius
+				hemi.is_hemisphere = true
+				hemi.radial_segments = 8
+				hemi.rings = 3
+				parts.append([hemi, _at(offset + Vector3(0, height, 0)), cap, 0.0, 0, 0.0, true])
+		"pebbles":
+			for i in 4:
+				var size := r.randf_range(0.08, 0.2)
+				parts.append([sphere(size, size * 1.2, 6, 3), _at(Vector3(r.randf_range(-0.4, 0.4), size * 0.25, r.randf_range(-0.4, 0.4))),
+					STONE.darkened(r.randf() * 0.25), 0.03, i])
+		"log":
+			parts.append([cylinder(0.24, 0.28, 3.2, 9), _at(Vector3(0, 0.2, 0), Vector3(0, 0, PI / 2)), BARK.darkened(0.1), 0.02, 3, 0.0, true])
+			parts.append([cylinder(0.25, 0.25, 0.04, 9), _at(Vector3(1.61, 0.2, 0), Vector3(0, 0, PI / 2)), Color(0.75, 0.6, 0.4)])
+			for i in 3:
+				parts.append([sphere(0.14, 0.08, 6, 2), _at(Vector3(r.randf_range(-1.2, 1.2), 0.42, r.randf_range(-0.08, 0.08))), Color(0.3, 0.5, 0.2), 0.02, i])
+		"reeds":
+			for i in 9:
+				var offset := Vector3(r.randf_range(-0.3, 0.3), 0, r.randf_range(-0.3, 0.3))
+				var height := r.randf_range(0.9, 1.6)
+				parts.append([cylinder(0.0, 0.025, height, 4), _at(offset + Vector3(0, height / 2, 0), Vector3(r.randf_range(-0.1, 0.1), 0, r.randf_range(-0.1, 0.1))),
+					Color(0.45, 0.55, 0.25).darkened(r.randf() * 0.15), 0.0, 0, 1.0])
+				if i % 3 == 0:
+					parts.append([cylinder(0.03, 0.03, 0.18, 5), _at(offset + Vector3(0, height * 0.85, 0)), Color(0.4, 0.26, 0.15), 0.0, 0, 1.0])
+		"bush":
+			parts.append([sphere(0.65, 0.9, 10, 6), _at(Vector3(0, 0.38, 0)), Color(0.24, 0.45, 0.2), 0.12, 7, 0.6, true])
+			parts.append([sphere(0.45, 0.65, 9, 5), _at(Vector3(0.45, 0.32, 0.2)), Color(0.28, 0.5, 0.22), 0.1, 8, 0.6, true])
+			parts.append([sphere(0.4, 0.6, 9, 5), _at(Vector3(-0.4, 0.3, -0.25)), Color(0.22, 0.42, 0.19), 0.1, 9, 0.6, true])
+		"dry_shrub":
+			for i in 7:
+				var angle := TAU * i / 7.0
+				var length := r.randf_range(0.4, 0.7)
+				parts.append([cylinder(0.008, 0.02, length, 4), _at(Vector3(sin(angle), 0, cos(angle)) * 0.12 + Vector3(0, length * 0.4, 0),
+					Vector3(cos(angle) * 0.6, 0, -sin(angle) * 0.6)), Color(0.55, 0.45, 0.3), 0.0, 0, 0.6])
+	_cache[key] = combine(parts)
+	return _cache[key]

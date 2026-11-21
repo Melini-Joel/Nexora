@@ -9,7 +9,7 @@ const DROP_SCENE := preload("res://scenes/item_drop.tscn")
 const CREATURE_SCENE := preload("res://scenes/creature.tscn")
 const PIECE_SCENE := preload("res://scenes/build_piece.tscn")
 
-const PLACEMENT_ATTEMPTS := 9000  ## Puntos que se prueban para poner árboles, rocas y plantas.
+const PLACEMENT_ATTEMPTS := 14000  ## Puntos que se prueban para poner árboles, rocas y plantas.
 const CHEST_COUNT := 30
 const RESPAWN_TIME := 90.0  ## Segundos hasta que reaparece un recurso agotado.
 const CHEST_REFILL_TIME := 480.0
@@ -17,16 +17,16 @@ const GATHER_RANGE := 6.0  ## Distancia máxima aceptada por el servidor (anti-t
 const GATHER_MIN_INTERVAL_MS := 350
 const STARTER_KIT := [["stone_hatchet", 1], ["berries", 5]]
 const MAX_CRAFT_QUEUE := 8
-const MOBS_PER_PLAYER := 3
-const HUNGER_PER_SECOND := 100.0 / (25.0 * 60.0)  ## La comida dura ~25 minutos.
+const MOBS_PER_PLAYER := 2
+const HUNGER_PER_SECOND := 100.0 / (40.0 * 60.0)  ## La comida dura ~40 minutos.
 const BLUEPRINT_WEIGHTS := {"bp_foundation": 5, "bp_wall": 5, "bp_doorway": 3, "bp_roof": 3, "bp_campfire": 4, "bp_stone": 1}
 
 ## Qué aparece en cada bioma: [probabilidad acumulada, tipo]
 const BIOME_SPAWNS := {
-	"meadow": [[0.09, "round"], [0.13, "pine"], [0.19, "rock"], [0.27, "fiber"], [0.34, "berry"]],
-	"forest": [[0.34, "pine"], [0.46, "round"], [0.51, "rock"], [0.55, "fiber"], [0.6, "berry"]],
-	"desert": [[0.06, "cactus"], [0.14, "rock"]],
-	"tundra": [[0.12, "snow_pine"], [0.21, "rock"]],
+	"meadow": [[0.06, "round"], [0.1, "oak"], [0.15, "birch"], [0.18, "pine"], [0.23, "rock"], [0.3, "fiber"], [0.36, "berry"]],
+	"forest": [[0.3, "pine"], [0.39, "round"], [0.47, "birch"], [0.54, "oak"], [0.58, "rock"], [0.62, "fiber"], [0.67, "berry"]],
+	"desert": [[0.06, "cactus"], [0.08, "dead"], [0.15, "rock"]],
+	"tundra": [[0.14, "snow_pine"], [0.17, "dead"], [0.25, "rock"]],
 }
 const ORE_CHANCE := {"meadow": 0.2, "forest": 0.25, "desert": 0.5, "tundra": 0.4}
 
@@ -53,6 +53,7 @@ var _inventories: Dictionary = {}  ## peer_id -> Inventory
 ## Jugadores que no están conectados (salieron o vienen de una partida guardada):
 ## nombre -> {"inventory": Array, "health", "hunger", "position": Vector3}
 var _saved_players: Dictionary = {}
+var _progress: Dictionary = {}  ## peer_id -> nivel, experiencia, puntos y habilidades (SkillDB)
 var _stats: Dictionary = {}  ## peer_id -> {"health", "hunger"}
 var _last_gather_ms: Dictionary = {}
 var _last_attack_ms: Dictionary = {}
@@ -146,6 +147,10 @@ func generate(world_seed: int) -> void:
 		grass.name = "Grass"
 		add_child(grass)
 		grass.setup(terrain, world_seed)
+		var decor := DecorField.new()
+		decor.name = "Decor"
+		add_child(decor)
+		decor.setup(terrain, world_seed, _in_clear_zone)
 	generated = true
 	generated_at_ms = Time.get_ticks_msec()
 	if multiplayer.is_server():
@@ -154,8 +159,8 @@ func generate(world_seed: int) -> void:
 
 
 func _build_environment() -> void:
-	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sun_angle_max = 20.0
+	var sky_material := ShaderMaterial.new()
+	sky_material.shader = load("res://shaders/sky.gdshader")
 	var sky := Sky.new()
 	sky.sky_material = sky_material
 
@@ -163,11 +168,17 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_white = 1.2
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 1.05
+	env.tonemap_white = 6.0
 	env.glow_enabled = true
-	env.glow_intensity = 0.6
-	env.glow_bloom = 0.05
+	env.glow_intensity = 0.55
+	env.glow_bloom = 0.04
+	env.ssao_radius = 1.2
+	env.ssao_intensity = 1.6
+	env.volumetric_fog_density = 0.008
+	env.volumetric_fog_anisotropy = 0.6
+	env.volumetric_fog_length = 120.0
 	env.fog_enabled = true
 	env.fog_density = 0.0012
 	env.fog_sky_affect = 0.3
@@ -182,6 +193,7 @@ func _build_environment() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.shadow_enabled = true
+	sun.shadow_blur = 1.5
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	add_child(sun)
 	var moon := DirectionalLight3D.new()
@@ -202,12 +214,20 @@ func _build_environment() -> void:
 
 
 ## Calidad gráfica elegida en Opciones.
+## Baja: sin sombras ni efectos · Media: sombras y brillo · Alta: + oclusión ambiental (SSAO),
+## luz indirecta en pantalla (SSIL) y sombras suaves · Ultra: + iluminación global (SDFGI) y
+## niebla volumétrica con rayos de sol. Los efectos de Alta/Ultra solo existen en Forward+.
 func _apply_graphics() -> void:
 	var quality: String = Settings.get_value("quality")
+	var high := quality in ["high", "ultra"]
 	_sun.shadow_enabled = quality != "low"
-	_sun.directional_shadow_max_distance = 160.0 if quality == "high" else 80.0
+	_sun.directional_shadow_max_distance = 200.0 if quality == "ultra" else (150.0 if high else 80.0)
+	_sun.light_angular_distance = 0.6 if high else 0.0
 	_environment.glow_enabled = quality != "low"
-	_environment.ssao_enabled = quality == "high"
+	_environment.ssao_enabled = high
+	_environment.ssil_enabled = high
+	_environment.sdfgi_enabled = quality == "ultra"
+	_environment.volumetric_fog_enabled = quality == "ultra"
 
 
 func _build_water() -> void:
@@ -217,6 +237,17 @@ func _build_water() -> void:
 	plane.subdivide_depth = 120
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/water.gdshader")
+	var ripples := FastNoiseLite.new()
+	ripples.frequency = 0.03
+	ripples.fractal_octaves = 3
+	var ripple_texture := NoiseTexture2D.new()
+	ripple_texture.width = 256
+	ripple_texture.height = 256
+	ripple_texture.seamless = true
+	ripple_texture.as_normal_map = true
+	ripple_texture.bump_strength = 6.0
+	ripple_texture.noise = ripples
+	mat.set_shader_parameter("ripple_normal", ripple_texture)
 	plane.material = mat
 	_water_material = mat
 	var water := MeshInstance3D.new()
@@ -399,12 +430,12 @@ func _place_resources(world_seed: int) -> void:
 		if kind == "":
 			continue
 		var slope := terrain.get_slope(p.x, p.y)
-		var spacing := 2.6 if kind in ["round", "pine", "snow_pine"] else 1.6
+		var spacing := 2.6 if kind in ["round", "pine", "snow_pine", "birch", "dead"] else (3.6 if kind == "oak" else 1.6)
 		if slope > (0.55 if kind == "rock" else 0.35) or not _space_free(p, spacing):
 			continue
 		var node: ResourceNode
 		match kind:
-			"round", "pine", "snow_pine":
+			"round", "pine", "snow_pine", "birch", "oak", "dead":
 				node = PropFactory.make_tree(rng, kind)
 			"rock":
 				node = PropFactory.make_rock(rng, rng.randf() < ORE_CHANCE[biome])
@@ -525,7 +556,9 @@ func _on_player_joined(peer_id: int) -> void:
 		for entry in STARTER_KIT:
 			inventory.add(entry[0], entry[1])
 	_inventories[peer_id] = inventory
-	_stats[peer_id] = {"health": float(saved.get("health", 100.0)), "hunger": float(saved.get("hunger", 80.0))}
+	_progress[peer_id] = saved.get("progress", SkillDB.empty_progress()).duplicate(true)
+	_stats[peer_id] = {"health": float(saved.get("health", _max_health(peer_id))), "hunger": float(saved.get("hunger", 80.0))}
+	_send_progress(peer_id)
 	# Sus mascotas lo vuelven a reconocer.
 	for creature in creatures_root.get_children():
 		if creature is Creature and creature.tamed_owner == player_name:
@@ -547,6 +580,7 @@ func _on_player_left(peer_id: int) -> void:
 	_inventories.erase(peer_id)
 	_craft_queues.erase(peer_id)
 	_stats.erase(peer_id)
+	_progress.erase(peer_id)
 	_last_gather_ms.erase(peer_id)
 
 
@@ -562,6 +596,7 @@ func _player_snapshot(peer_id: int) -> Dictionary:
 	var stats: Dictionary = _stats.get(peer_id, {"health": 100.0, "hunger": 80.0})
 	return {
 		"inventory": inventory.to_array(), "health": stats["health"], "hunger": stats["hunger"],
+		"progress": _progress.get(peer_id, SkillDB.empty_progress()).duplicate(true),
 		"position": player.sync_pos if player else get_spawn_point(peer_id),
 	}
 
@@ -673,7 +708,7 @@ func _server_tick() -> void:
 		if stats["hunger"] <= 0.0:
 			stats["health"] -= 1.0  # Hambre: se pierde vida.
 		elif stats["hunger"] > 50.0:
-			stats["health"] = minf(100.0, stats["health"] + 0.5)
+			stats["health"] = minf(_max_health(peer_id), stats["health"] + 0.5)
 		if stats["health"] <= 0.0:
 			_kill_player(peer_id, "de hambre")
 		else:
@@ -689,14 +724,69 @@ func _send_stats(peer_id: int) -> void:
 	if stats.is_empty():
 		return
 	if peer_id == multiplayer.get_unique_id():
-		_receive_stats(stats["health"], stats["hunger"])
+		_receive_stats(stats["health"], stats["hunger"], _max_health(peer_id))
 	else:
-		_receive_stats.rpc_id(peer_id, stats["health"], stats["hunger"])
+		_receive_stats.rpc_id(peer_id, stats["health"], stats["hunger"], _max_health(peer_id))
 
 
 @rpc("authority", "reliable")
-func _receive_stats(health: float, hunger: float) -> void:
-	Game.set_stats(health, hunger)
+func _receive_stats(health: float, hunger: float, max_health: float) -> void:
+	Game.set_stats(health, hunger, max_health)
+
+
+# --- Experiencia y niveles (servidor) ------------------------------------------------------
+
+func _max_health(peer_id: int) -> float:
+	return SkillDB.max_health(_progress.get(peer_id, {}))
+
+
+## Suma experiencia. Al llenar la barra sube de nivel y gana puntos para mejorar habilidades.
+func add_xp(peer_id: int, amount: int) -> void:
+	var progress: Dictionary = _progress.get(peer_id, {})
+	if progress.is_empty() or amount <= 0:
+		return
+	progress["xp"] = int(progress["xp"]) + amount
+	var leveled := false
+	while progress["xp"] >= SkillDB.xp_to_next(progress["level"]):
+		progress["xp"] -= SkillDB.xp_to_next(progress["level"])
+		progress["level"] += 1
+		progress["points"] += SkillDB.points_for_level(progress["level"])
+		leveled = true
+	if leveled:
+		Network.announce.rpc("%s subió a nivel %d" % [Network.players.get(peer_id, {}).get("name", "?"), progress["level"]])
+	_send_progress(peer_id, leveled)
+
+
+func add_xp_all(amount: int) -> void:
+	for peer_id in _progress.keys():
+		add_xp(peer_id, amount)
+
+
+func _send_progress(peer_id: int, leveled: bool = false) -> void:
+	var data: Dictionary = _progress.get(peer_id, {})
+	if peer_id == multiplayer.get_unique_id():
+		_receive_progress(data, leveled)
+	else:
+		_receive_progress.rpc_id(peer_id, data, leveled)
+
+
+@rpc("authority", "reliable")
+func _receive_progress(data: Dictionary, leveled: bool) -> void:
+	Game.set_progress(data, leveled)
+
+
+func _server_skill_up(peer_id: int, skill: String) -> void:
+	var progress: Dictionary = _progress.get(peer_id, {})
+	if progress.is_empty() or not SkillDB.SKILLS.has(skill) or int(progress["points"]) <= 0:
+		return
+	if SkillDB.skill_level(progress, skill) >= int(SkillDB.SKILLS[skill]["max"]):
+		return
+	progress["skills"][skill] = SkillDB.skill_level(progress, skill) + 1
+	progress["points"] -= 1
+	if skill == "vitality":
+		_stats[peer_id]["health"] += 15.0
+	_send_progress(peer_id)
+	_send_stats(peer_id)
 
 
 @rpc("authority", "call_local", "unreliable")
@@ -742,7 +832,7 @@ func _kill_player(peer_id: int, cause: String) -> void:
 			var drop_pos := pos + offset
 			drop_pos.y = maxf(terrain.get_height(drop_pos.x, drop_pos.z), TerrainGenerator.WATER_LEVEL - 0.3)
 			_spawn_drop(stack["id"], stack["count"], drop_pos)
-	_stats[peer_id] = {"health": 100.0, "hunger": 60.0}
+	_stats[peer_id] = {"health": _max_health(peer_id), "hunger": 60.0}
 	_send_inventory(peer_id)
 	_send_stats(peer_id)
 	Network.announce.rpc("%s murió %s. Sus cosas quedaron en el suelo." % [player.player_name, cause])
@@ -958,6 +1048,9 @@ func _handle_action(peer_id: int, action: String, args: Array) -> void:
 		"storage_quick":
 			if args.size() == 3:
 				_server_storage_quick(peer_id, str(args[0]), str(args[1]), int(args[2]))
+		"skill_up":
+			if args.size() == 1:
+				_server_skill_up(peer_id, str(args[0]))
 		"bed_claim":
 			if args.size() == 1:
 				var bed := pieces_root.get_node_or_null(str(args[0]))
@@ -1049,7 +1142,7 @@ func _server_eat(peer_id: int, slot: int) -> void:
 	var item := ItemDB.get_item(id)
 	var stats: Dictionary = _stats[peer_id]
 	stats["hunger"] = minf(100.0, stats["hunger"] + item["food"])
-	stats["health"] = clampf(stats["health"] + item.get("heal", 0), 1.0, 100.0)
+	stats["health"] = clampf(stats["health"] + item.get("heal", 0), 1.0, _max_health(peer_id))
 	_send_inventory(peer_id)
 	_send_stats(peer_id)
 
@@ -1090,7 +1183,7 @@ func _server_attack(peer_id: int, creature_name: String) -> void:
 	if now - int(_last_attack_ms.get(peer_id, -100000)) < int(ItemDB.attack_cooldown(held) * 800.0):
 		return
 	_last_attack_ms[peer_id] = now
-	creature.take_damage(ItemDB.damage(held), player)
+	creature.take_damage(ItemDB.damage(held) * SkillDB.damage_multiplier(_progress.get(peer_id, {})), player)
 
 
 func on_creature_died(creature: Creature, killer_peer: int) -> void:
@@ -1104,6 +1197,12 @@ func on_creature_died(creature: Creature, killer_peer: int) -> void:
 			_give(killer_peer, blueprint, 1)
 			_notify_peer(killer_peer, "¡La sombra dejó un plano: %s!" % ItemDB.item_name(blueprint))
 		QuestManager.report_kill(creature.species)
+		var xp_key := "kill_animal"
+		if creature.species == "shade":
+			xp_key = "kill_shade"
+		elif creature.species == "brute":
+			xp_key = "kill_brute"
+		add_xp(killer_peer, SkillDB.XP[xp_key])
 	if not CreatureDB.is_mob(creature.species):
 		_animal_respawns.append([creature.species, 120.0])
 
@@ -1125,6 +1224,7 @@ func _server_feed(peer_id: int, creature_name: String) -> void:
 	if creature.add_tame_progress(peer_id, player_name):
 		Network.announce.rpc("¡%s domesticó un %s!" % [player_name, CreatureDB.display_name(creature.species)])
 		QuestManager.report_tame(creature.species)
+		add_xp(peer_id, SkillDB.XP["tame"])
 
 
 func _server_pet_command(peer_id: int, creature_name: String) -> void:
@@ -1180,7 +1280,7 @@ func _spawn_night_mobs() -> void:
 			if creature is Creature and CreatureDB.is_mob(creature.species) and not creature.dead \
 					and creature.global_position.distance_to(player.global_position) < 60.0:
 				nearby += 1
-		if nearby >= MOBS_PER_PLAYER + mini(day_night.day - 1, 3):
+		if nearby >= MOBS_PER_PLAYER + mini(day_night.day - 1, 2):
 			continue
 		var pos := random_land_spot([], rng, player.global_position, 25.0, 40.0)
 		if pos == Vector3.INF:
@@ -1217,6 +1317,7 @@ func _server_open_chest(peer_id: int, chest_name: String) -> void:
 	for item: String in loot:
 		_give(peer_id, item, int(loot[item]))
 	_notify_peer(peer_id, "Cofre: %s" % ItemDB.list_text(loot))
+	add_xp(peer_id, SkillDB.XP["chest"])
 
 
 func _roll_loot() -> Dictionary:
@@ -1414,6 +1515,7 @@ func _server_build(peer_id: int, piece_id: String, hit: Variant, yaw: float) -> 
 			_beds[piece.owner_name] = str(piece.name)
 			_notify_peer(peer_id, "Cama lista: si morís, reaparecés acá.")
 	QuestManager.report_build(piece_id)
+	add_xp(peer_id, SkillDB.XP["build"])
 
 
 func _server_demolish(peer_id: int, piece_name: String) -> void:
@@ -1503,6 +1605,7 @@ func _update_crafting(delta: float) -> void:
 		var recipe := RecipeDB.get_recipe(job["recipe"])
 		_give(peer_id, recipe["result"], recipe["amount"])
 		QuestManager.report_craft(recipe["result"], recipe["amount"])
+		add_xp(peer_id, SkillDB.XP["craft"])
 		job["remaining"] -= 1
 		if job["remaining"] > 0:
 			job["time_left"] = job["time"]
@@ -1544,7 +1647,9 @@ func _server_gather(peer_id: int, node_name: String) -> void:
 	var amount := node.base_yield
 	if node.preferred_tool != "" and ItemDB.tool_type(held) == node.preferred_tool:
 		amount *= ItemDB.tool_power(held)
+	amount = ceili(amount * SkillDB.gather_multiplier(_progress.get(peer_id, {})))
 	node.hits_left -= 1
+	add_xp(peer_id, SkillDB.XP["gather"])
 	_give(peer_id, node.resource_type, amount)
 	QuestManager.report_collect(node.resource_type, amount)
 	if node.hits_left <= 0:

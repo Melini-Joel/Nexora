@@ -107,7 +107,7 @@ func _build_graphics_tab(grid: GridContainer) -> void:
 	_add_option(grid, "Calidad gráfica", "quality", Settings.QUALITY_LEVELS)
 	var info := UIStyle.label(
 		"Baja: sin sombras ni suavizado, render al 75%. Ideal para PCs viejas o notebooks.\n" +
-		"Media: sombras y suavizado 2x.\nAlta: sombras de largo alcance y suavizado 4x.", 14, UIStyle.TEXT_DIM)
+		"Media: sombras, brillo y suavizado 2x.\nAlta: sombras suaves, oclusión ambiental y luz indirecta.\nUltra: iluminación global y niebla con rayos de sol (necesita una buena placa de video).", 14, UIStyle.TEXT_DIM)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.custom_minimum_size = Vector2(300, 0)
 	grid.add_child(info)

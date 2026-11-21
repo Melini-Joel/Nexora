@@ -14,10 +14,10 @@ const JUMP_VELOCITY := 5.5
 const INTERACT_DISTANCE := 3.6
 const GATHER_COOLDOWN := 0.5
 const RAY_MASK := 1 | ItemDrop.PICKUP_LAYER
-const SPRINT_COST := 14.0  ## Energía por segundo al correr.
-const JUMP_COST := 10.0
-const ATTACK_COST := 7.0
-const STAMINA_REGEN := 22.0
+const SPRINT_COST := 8.0  ## Energía por segundo al correr.
+const JUMP_COST := 6.0
+const ATTACK_COST := 4.0
+const STAMINA_REGEN := 30.0
 
 var player_name := "Jugador":
 	set(value):
@@ -95,7 +95,7 @@ func _exit_tree() -> void:
 func respawn(pos: Vector3) -> void:
 	global_position = pos
 	velocity = Vector3.ZERO
-	Game.stamina = 100.0
+	Game.stamina = Game.max_stamina()
 
 
 # --- Construcción del personaje -------------------------------------------------------
@@ -229,12 +229,18 @@ func _apply_camera_settings() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority() or Cinematics.playing:
 		return
+	if event.is_action_pressed("character") and not Game.ui_open and not Game.dialog_open:
+		Game.set_character_open(not Game.character_open)
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("map") and not Game.ui_open and not Game.dialog_open:
 		Game.set_map_open(not Game.map_open)
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause"):
-		if Game.map_open:
+		if Game.character_open:
+			Game.set_character_open(false)
+		elif Game.map_open:
 			Game.set_map_open(false)
 		elif Game.inventory_open:
 			Game.set_inventory_open(false)
@@ -304,7 +310,7 @@ func _physics_process(delta: float) -> void:
 		_use_stamina(SPRINT_COST * delta)
 	_regen_stamina(delta)
 	# Cuanto más pesa la mochila, más lento. Con hambre extrema, también.
-	var speed := (SPRINT_SPEED if sprinting else WALK_SPEED) * Game.speed_multiplier()
+	var speed := (SPRINT_SPEED if sprinting else WALK_SPEED) * Game.speed_multiplier() * SkillDB.speed_multiplier(Game.progress)
 	if Game.hunger <= 0.0:
 		speed *= 0.8
 	if global_position.y < TerrainGenerator.WATER_LEVEL - 0.6:
@@ -330,14 +336,14 @@ func _physics_process(delta: float) -> void:
 
 func _use_stamina(amount: float) -> void:
 	Game.stamina = maxf(0.0, Game.stamina - amount)
-	_stamina_delay = 1.0
+	_stamina_delay = 0.6
 
 
 func _regen_stamina(delta: float) -> void:
 	_stamina_delay -= delta
 	if _stamina_delay <= 0.0:
-		var regen := STAMINA_REGEN * (0.5 if Game.hunger < 15.0 else 1.0)
-		Game.stamina = minf(100.0, Game.stamina + regen * delta)
+		var regen := STAMINA_REGEN * SkillDB.stamina_regen_multiplier(Game.progress) * (0.5 if Game.hunger < 15.0 else 1.0)
+		Game.stamina = minf(Game.max_stamina(), Game.stamina + regen * delta)
 
 
 func _update_camera_shake(delta: float) -> void:

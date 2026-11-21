@@ -28,6 +28,9 @@ func _ready() -> void:
 		var grass := GrassField.new()
 		add_child(grass)
 		grass.setup(_terrain, world_seed)
+		var decor := DecorField.new()
+		add_child(decor)
+		decor.setup(_terrain, world_seed, func(p: Vector2): return p.length() < 6.0)
 	_build_fireflies()
 	_camera = Camera3D.new()
 	_camera.fov = 55.0
@@ -38,7 +41,8 @@ func _ready() -> void:
 
 
 func _build_environment() -> void:
-	var sky_material := ProceduralSkyMaterial.new()
+	var sky_material := ShaderMaterial.new()
+	sky_material.shader = load("res://shaders/sky.gdshader")
 	var sky := Sky.new()
 	sky.sky_material = sky_material
 	var env := Environment.new()
@@ -130,11 +134,11 @@ func _scatter_trees(world_seed: int) -> void:
 		var kind := ""
 		match _terrain.get_biome(p.x, p.y):
 			"forest":
-				kind = "pine" if rng.randf() < 0.7 else "round"
+				kind = ["pine", "pine", "round", "birch", "oak"][rng.randi() % 5]
 			"tundra":
 				kind = "snow_pine"
 			"meadow":
-				kind = "round" if rng.randf() < 0.65 else "pine"
+				kind = ["round", "oak", "birch", "birch", "pine"][rng.randi() % 5]
 		var node: Node3D
 		if kind == "":
 			node = PropFactory.make_cactus(rng)

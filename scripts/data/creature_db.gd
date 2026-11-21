@@ -28,7 +28,7 @@ const SPECIES := {
 			"antlers": true, "legs": 1.25, "snout": 0.8},
 	},
 	"boar": {
-		"name": "Jabalí", "body": "quadruped", "behavior": "neutral", "health": 90.0, "speed": 5.8,
+		"name": "Jabalí", "body": "quadruped", "behavior": "neutral", "health": 90.0, "speed": 4.6,
 		"damage": 12.0, "biomes": ["forest", "meadow"], "count": 8,
 		"drops": {"raw_meat": 5, "leather": 4},
 		"tame": {"food": "raw_meat", "amount": 5, "combat": true},
@@ -36,14 +36,14 @@ const SPECIES := {
 			"tusks": true, "legs": 0.7, "snout": 0.9},
 	},
 	"wolf": {
-		"name": "Lobo", "body": "quadruped", "behavior": "wolf", "health": 80.0, "speed": 7.8,
+		"name": "Lobo", "body": "quadruped", "behavior": "wolf", "health": 80.0, "speed": 5.6,
 		"damage": 14.0, "biomes": ["forest", "tundra"], "count": 8,
 		"drops": {"raw_meat": 3, "leather": 4},
 		"tame": {"food": "cooked_meat", "amount": 6, "combat": true},
 		"look": {"size": 0.75, "color": Color(0.5, 0.5, 0.52), "ears": "pointy", "tail": "long", "snout": 1.0},
 	},
 	"bear": {
-		"name": "Oso", "body": "quadruped", "behavior": "neutral", "health": 260.0, "speed": 6.2,
+		"name": "Oso", "body": "quadruped", "behavior": "neutral", "health": 260.0, "speed": 4.8,
 		"damage": 26.0, "biomes": ["tundra", "forest"], "count": 4,
 		"drops": {"raw_meat": 10, "leather": 12},
 		"tame": {"food": "cooked_meat", "amount": 12, "combat": true},
@@ -59,11 +59,11 @@ const SPECIES := {
 	},
 	# --- Criaturas nocturnas ---
 	"shade": {
-		"name": "Sombra", "body": "humanoid", "behavior": "mob", "health": 60.0, "speed": 4.6,
+		"name": "Sombra", "body": "humanoid", "behavior": "mob", "health": 60.0, "speed": 3.4,
 		"damage": 7.0, "drops": {"metal_fragments": 3}, "blueprint_chance": 0.3, "scale": 1.0,
 	},
 	"brute": {
-		"name": "Bruto sombrío", "body": "humanoid", "behavior": "mob", "health": 170.0, "speed": 3.8,
+		"name": "Bruto sombrío", "body": "humanoid", "behavior": "mob", "health": 170.0, "speed": 2.8,
 		"damage": 16.0, "drops": {"metal_fragments": 10, "leather": 4}, "blueprint_chance": 0.6, "scale": 1.35,
 	},
 }

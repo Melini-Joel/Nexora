@@ -6,6 +6,7 @@ const InventoryUI := preload("res://scripts/ui/inventory_ui.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
 const DialogUI := preload("res://scripts/ui/dialog_ui.gd")
 const MapUI := preload("res://scripts/ui/map_ui.gd")
+const CharacterUI := preload("res://scripts/ui/character_ui.gd")
 
 
 ## Brújula: muestra hacia dónde mirás (N, NE, E...) y la dirección del campamento,
@@ -78,7 +79,9 @@ var _pause_overlay: Control
 var _last_totals: Dictionary = {}
 var _crosshair: Label
 var _fps_label: Label
-var _bars: Dictionary = {}  ## "health" / "hunger" / "stamina" -> [ProgressBar, Label]
+var _bars: Dictionary = {}
+var _xp_label: Label
+var _xp_bar: ProgressBar  ## "health" / "hunger" / "stamina" -> [ProgressBar, Label]
 var _clock: Label
 var _biome: Label
 var _damage_flash: ColorRect
@@ -123,6 +126,7 @@ func _ready() -> void:
 	_root.visible = not Cinematics.playing
 	add_child(InventoryUI.new())
 	add_child(MapUI.new())
+	add_child(CharacterUI.new())
 	_last_totals = _item_totals()
 	_refresh_quest()
 	_refresh_players()
@@ -204,7 +208,7 @@ func _build_bottom() -> void:
 	_notifications.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_notifications)
 
-	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click usar/atacar · E interactuar\n1-6 / rueda: barra rápida · R pieza (martillo) · M mapa · V cámara · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
+	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click usar/atacar · E interactuar\n1-6 / rueda: barra rápida · R pieza (martillo) · M mapa · C personaje · V cámara · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.offset_left = 20
@@ -325,7 +329,7 @@ func _build_vitals() -> void:
 	panel.anchor_bottom = 1.0
 	panel.offset_left = -260
 	panel.offset_right = -20
-	panel.offset_top = -110
+	panel.offset_top = -150
 	panel.offset_bottom = -20
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_root.add_child(panel)
@@ -353,10 +357,24 @@ func _build_vitals() -> void:
 		bar.add_theme_stylebox_override("background", background)
 		row.add_child(bar)
 		_bars[entry[0]] = [bar, label]
+	# Nivel y experiencia.
+	_xp_label = UIStyle.label("", 14, Color(0.6, 0.8, 1.0))
+	box.add_child(_xp_label)
+	_xp_bar = ProgressBar.new()
+	_xp_bar.show_percentage = false
+	_xp_bar.custom_minimum_size = Vector2(220, 6)
+	var xp_fill := StyleBoxFlat.new()
+	xp_fill.bg_color = Color(0.45, 0.7, 1.0)
+	var xp_background := StyleBoxFlat.new()
+	xp_background.bg_color = Color(0.15, 0.15, 0.18, 0.9)
+	_xp_bar.add_theme_stylebox_override("fill", xp_fill)
+	_xp_bar.add_theme_stylebox_override("background", xp_background)
+	box.add_child(_xp_bar)
 	_refresh_vitals()
 
 
 func _refresh_vitals() -> void:
+	(_bars["health"][0] as ProgressBar).max_value = Game.max_health
 	(_bars["health"][0] as ProgressBar).value = Game.health
 	(_bars["hunger"][0] as ProgressBar).value = Game.hunger
 	(_bars["hunger"][1] as Label).add_theme_color_override("font_color", Color(1, 0.45, 0.4) if Game.hunger < 15 else UIStyle.TEXT)
@@ -440,7 +458,12 @@ func _update_world_info() -> void:
 			show_notification("Entraste a: %s" % biome)
 		_last_biome = biome
 		_update_build_hint(player, world)
+	(_bars["stamina"][0] as ProgressBar).max_value = Game.max_stamina()
 	(_bars["stamina"][0] as ProgressBar).value = Game.stamina
+	var progress := Game.progress
+	_xp_label.text = "Nivel %d%s" % [progress.get("level", 1), "  ·  %d punto(s): C" % progress["points"] if int(progress.get("points", 0)) > 0 else ""]
+	_xp_bar.max_value = SkillDB.xp_to_next(progress.get("level", 1))
+	_xp_bar.value = progress.get("xp", 0)
 
 
 func _update_build_hint(player: Node, world: Node) -> void:

@@ -20,6 +20,8 @@ signal blueprints_changed
 signal station_opened(station: String)
 signal storage_changed
 signal map_open_changed(is_open: bool)
+signal progress_changed(leveled: bool)
+signal character_open_changed(is_open: bool)
 
 ## Copia local del inventario (la verdad la tiene el servidor).
 var inventory: Array = []
@@ -31,6 +33,10 @@ var dialog_open := false  ## Hablando con un NPC.
 var craft_queue: Array = []
 ## Estadísticas del jugador local (vida y hambre las manda el servidor; la energía es local).
 var health := 100.0
+var max_health := 100.0
+## Nivel, experiencia, puntos y habilidades (ver SkillDB). Lo manda el servidor.
+var progress: Dictionary = SkillDB.empty_progress()
+var character_open := false
 var hunger := 100.0
 var stamina := 100.0
 ## Estación abierta con E ("" = inventario normal con Tab).
@@ -75,16 +81,39 @@ func carried_weight() -> float:
 
 
 func capacity() -> float:
-	return Inventory.capacity_for(inventory)
+	return Inventory.capacity_for(inventory) + SkillDB.carry_bonus(progress)
+
+
+func max_stamina() -> float:
+	return SkillDB.max_stamina(progress)
+
+
+func set_progress(data: Dictionary, leveled: bool) -> void:
+	progress = data
+	if leveled:
+		Sound.play("quest_complete")
+		notify.emit("¡Subiste a nivel %d! Tenés %d punto(s) para mejorar: apretá C." % [data["level"], data["points"]])
+	progress_changed.emit(leveled)
+
+
+func set_character_open(is_open: bool) -> void:
+	if is_open and inventory_open:
+		set_inventory_open(false)
+	if is_open and map_open:
+		set_map_open(false)
+	character_open = is_open
+	_update_mouse()
+	character_open_changed.emit(is_open)
 
 
 func load_ratio() -> float:
 	return carried_weight() / capacity()
 
 
-func set_stats(new_health: float, new_hunger: float) -> void:
+func set_stats(new_health: float, new_hunger: float, new_max_health: float = 100.0) -> void:
 	health = new_health
 	hunger = new_hunger
+	max_health = new_max_health
 	stats_changed.emit()
 
 
@@ -175,7 +204,7 @@ func can_control_player() -> bool:
 
 ## ¿Se puede mirar con el mouse, golpear y recoger?
 func can_act() -> bool:
-	return can_control_player() and not inventory_open and not map_open
+	return can_control_player() and not inventory_open and not map_open and not character_open
 
 
 func set_inventory_open(is_open: bool) -> void:
@@ -200,7 +229,7 @@ func set_pause_open(is_open: bool) -> void:
 
 
 func _update_mouse() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if (ui_open or inventory_open or dialog_open or map_open) else Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if (ui_open or inventory_open or dialog_open or map_open or character_open) else Input.MOUSE_MODE_CAPTURED
 
 
 func reset() -> void:
@@ -217,6 +246,9 @@ func reset() -> void:
 	storage_box = ""
 	storage_slots = []
 	map_open = false
+	character_open = false
+	progress = SkillDB.empty_progress()
+	max_health = 100.0
 	last_death_position = Vector3.INF
 	local_player = null
 
@@ -236,6 +268,7 @@ func _setup_input() -> void:
 	_add_keys("camera_toggle", [KEY_V])
 	_add_keys("build_rotate", [KEY_R])
 	_add_keys("map", [KEY_M])
+	_add_keys("character", [KEY_C])
 	_add_mouse_button("secondary", MOUSE_BUTTON_RIGHT)
 	_add_keys("pause", [KEY_ESCAPE])
 	_add_keys("skip_cinematic", [KEY_ESCAPE, KEY_ENTER, KEY_SPACE])

@@ -100,6 +100,7 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 | 1-6 / rueda del mouse | Elegir objeto de la barra rápida |
 | Tab / I | Abrir inventario |
 | M | Mapa de la isla |
+| **C** | **Personaje: nivel, experiencia y habilidades** |
 | V | Cámara cerca / normal / lejos |
 | Esc | Cerrar inventario · menú de pausa · saltear cinemática |
 
@@ -119,18 +120,30 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 
 ### Mundo
 - **Isla de 512 × 512 m** (4 veces más grande) con **4 biomas**: Pradera, Bosque, Desierto y Tundra nevada. Cada uno tiene sus colores, árboles, recursos y animales. Arriba de la pantalla se ve en qué bioma estás.
-- **Pasto denso que se mueve con el viento**, agua con olas, niebla y cielo dinámico.
-- **Ciclo de día y noche** de 12 minutos (unos 8 de día y 4 de noche), sincronizado para todos los jugadores.
+- **Vegetación abundante:** 5 tipos de árbol (pino, pino nevado, roble grande, abedul, árbol redondo y árbol seco), helechos, flores de 4 colores, hongos, piedritas, troncos caídos, juncos en la orilla, arbustos y matorrales secos. Las hojas y el pasto se mueven con el viento.
+- **Gráficos más realistas:** terreno suave con roca en las pendientes y nieve en las cumbres, cielo con nubes que se mueven, sol y estrellas, agua con reflejos y ondas, tonos de cine (ACES) y sombras suaves. En calidad **Alta** y **Ultra** (Opciones → Gráficos) se suman oclusión ambiental (SSAO), luz rebotada (SSIL), iluminación global (SDFGI) y niebla volumétrica.
+- **Ciclo de día y noche** de 30 minutos (unos 20 de día y 10 de noche), sincronizado para todos los jugadores.
 
 ### Supervivencia
 - **Vida, hambre y energía.** El hambre baja con el tiempo y, si llega a 0, perdés vida. La energía se gasta al correr, saltar y pelear.
 - **Comida:** bayas, carne cruda (hace mal) y carne cocida (cocinala con E sobre una fogata).
 - **Muerte:** dejás todo en el suelo y reaparecés en el campamento.
 
+### Personaje y habilidades (tecla C)
+- Ganás **experiencia** con todo lo que hacés: recolectar (2), fabricar (5), construir (8), abrir cofres (12), cazar (15), matar sombras (25) y brutos (70), domesticar (60) y completar misiones (120, para todo el grupo).
+- Cada nivel da **1 punto** (2 puntos cada 5 niveles). Los gastás en 6 habilidades de hasta 10 niveles:
+  - **Vitalidad:** +15 de vida máxima.
+  - **Resistencia:** +15 de energía máxima y recuperación un 8% más rápida.
+  - **Fuerza:** +10% de daño.
+  - **Recolección:** +15% de recursos.
+  - **Carga:** +6 kg de capacidad.
+  - **Agilidad:** +4% de velocidad.
+- El progreso se guarda con la partida y cada jugador tiene el suyo.
+
 ### Combate y animales
 - **Armas:** garrote de madera, lanza de piedra (mucho alcance) y espada de metal (en la mesa de trabajo).
 - **Animales:** conejo, ciervo, jabalí, lobo, oso y lagarto. Huyen, se defienden o te atacan según la especie. Al cazarlos sueltan carne y cuero.
-- **Sombras nocturnas:** de noche aparecen sombras (y desde el día 2, brutos) que te buscan. Se queman al amanecer y pueden soltar **planos**.
+- **Sombras nocturnas:** de noche aparecen sombras (y desde el día 2, brutos) que te buscan. Son más lentas que vos corriendo, así que siempre podés escapar. Se queman al amanecer y pueden soltar **planos**.
 - **Domesticación:** ver **[TABLA_DOMESTICACION.md](TABLA_DOMESTICACION.md)**.
 
 ### Construcción

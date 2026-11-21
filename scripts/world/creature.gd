@@ -300,7 +300,7 @@ func _chase_and_attack(target: Node3D, speed: float) -> Vector3:
 	if to_target.length() <= reach:
 		_body.rotation.y = atan2(-to_target.x, -to_target.z)
 		if _attack_cooldown <= 0.0:
-			_attack_cooldown = 1.5 if CreatureDB.is_mob(species) else 1.2
+			_attack_cooldown = 1.8 if CreatureDB.is_mob(species) else 1.3
 			attack_count += 1
 			var damage: float = _data.get("damage", 5.0)
 			if target is Creature:

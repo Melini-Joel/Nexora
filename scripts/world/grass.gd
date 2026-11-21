@@ -13,7 +13,7 @@ const TINT_BY_BIOME := {
 	"desert": Color(1.45, 1.2, 0.6),
 	"tundra": Color(1.1, 1.15, 1.1),
 }
-const QUALITY := {"low": [220, 40.0], "medium": [480, 65.0], "high": [850, 95.0]}  ## [matas por parcela, distancia visible]
+const QUALITY := {"low": [220, 40.0], "medium": [600, 70.0], "high": [1000, 100.0], "ultra": [1500, 130.0]}  ## [matas por parcela, distancia visible]
 
 var terrain: TerrainGenerator
 var _pending: Array[Vector2i] = []

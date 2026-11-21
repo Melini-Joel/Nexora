@@ -171,55 +171,80 @@ func _vertex(ix: int, iz: int) -> Vector3:
 	return Vector3(-half + ix * _step, _h(ix, iz), -half + iz * _step)
 
 
+## Malla suave: cada vértice tiene su normal (promedio del relieve) y su color, así las
+## laderas y los cambios de bioma se ven graduales y no facetados.
 func _build_mesh() -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var count := RESOLUTION + 1
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	vertices.resize(count * count)
+	normals.resize(count * count)
+	colors.resize(count * count)
+	for iz in count:
+		for ix in count:
+			var i := iz * count + ix
+			var v := _vertex(ix, iz)
+			var dx := _h(mini(ix + 1, RESOLUTION), iz) - _h(maxi(ix - 1, 0), iz)
+			var dz := _h(ix, mini(iz + 1, RESOLUTION)) - _h(ix, maxi(iz - 1, 0))
+			var normal := Vector3(-dx, 2.0 * _step, -dz).normalized()
+			vertices[i] = v
+			normals[i] = normal
+			colors[i] = _vertex_color(v, normal, _biomes[i])
+	var indices := PackedInt32Array()
+	indices.resize(RESOLUTION * RESOLUTION * 6)
+	var k := 0
 	for iz in RESOLUTION:
 		for ix in RESOLUTION:
-			var a := _vertex(ix, iz)
-			var b := _vertex(ix + 1, iz)
-			var c := _vertex(ix, iz + 1)
-			var d := _vertex(ix + 1, iz + 1)
-			var biome: int = _biomes[iz * (RESOLUTION + 1) + ix]
-			_add_triangle(st, a, b, c, biome)
-			_add_triangle(st, b, d, c, _biomes[(iz + 1) * (RESOLUTION + 1) + ix + 1])
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.roughness = 0.95
-	st.set_material(material)
-	return st.commit()
+			var a := iz * count + ix
+			var b := a + 1
+			var c := a + count
+			var d := c + 1
+			for index in [a, b, c, b, d, c]:
+				indices[k] = index
+				k += 1
+			_faces.append_array([vertices[a], vertices[b], vertices[c], vertices[b], vertices[d], vertices[c]])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var material := ShaderMaterial.new()
+	material.shader = load("res://shaders/terrain.gdshader")
+	var noise := FastNoiseLite.new()
+	noise.frequency = 0.02
+	noise.fractal_octaves = 4
+	var texture := NoiseTexture2D.new()
+	texture.width = 256
+	texture.height = 256
+	texture.seamless = true
+	texture.noise = noise
+	texture.generate_mipmaps = true
+	material.set_shader_parameter("detail_noise", texture)
+	mesh.surface_set_material(0, material)
+	return mesh
 
 
-func _add_triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, biome: int) -> void:
-	# Una normal por triángulo = estilo low-poly facetado.
-	var normal := (c - a).cross(b - a).normalized()
-	var color := _triangle_color(a, b, c, normal, biome)
-	_faces.append_array([a, b, c])
-	for v in [a, b, c]:
-		st.set_color(color)
-		st.set_normal(normal)
-		st.add_vertex(v)
-
-
-func _triangle_color(a: Vector3, b: Vector3, c: Vector3, normal: Vector3, biome: int) -> Color:
-	var center := (a + b + c) / 3.0
-	var h := center.y
+func _vertex_color(v: Vector3, normal: Vector3, biome: int) -> Color:
+	var h := v.y
 	var colors: Array = BIOME_COLORS[biome]
 	var color: Color
+	var variation := _color_noise.get_noise_2d(v.x, v.z)
 	if h < WATER_LEVEL - 0.5:
 		color = SEABED
 	elif h < WATER_LEVEL + 0.8 and biome != Biome.TUNDRA:
-		color = SAND
-	elif normal.y < 0.72:
-		color = ROCK if biome != Biome.DESERT else Color(0.76, 0.56, 0.38)
-		if biome == Biome.TUNDRA:
-			color = ROCK.lightened(0.15)
-	elif h > SNOW_HEIGHT + 4.0:
-		color = SNOW
+		color = SAND.lerp(colors[0], clampf((h - WATER_LEVEL) / 1.6, 0.0, 0.4))
 	else:
-		var t := clampf(h / SNOW_HEIGHT + _color_noise.get_noise_2d(center.x * 0.5, center.z * 0.5) * 0.3, 0.0, 1.0)
+		var t := clampf(h / SNOW_HEIGHT + variation * 0.3, 0.0, 1.0)
 		color = (colors[0] as Color).lerp(colors[1], t)
-	var variation := _color_noise.get_noise_2d(center.x, center.z) * 0.07
-	color = color.lightened(variation) if variation > 0.0 else color.darkened(-variation)
+		# Las pendientes fuertes muestran roca, con una transición suave.
+		var rock := ROCK.lightened(0.15) if biome == Biome.TUNDRA else (Color(0.76, 0.56, 0.38) if biome == Biome.DESERT else ROCK)
+		color = color.lerp(rock, smoothstep(0.82, 0.66, normal.y))
+		if h > SNOW_HEIGHT + 2.0:
+			color = color.lerp(SNOW, smoothstep(SNOW_HEIGHT + 2.0, SNOW_HEIGHT + 7.0, h) * smoothstep(0.6, 0.8, normal.y))
+	color = color.lightened(variation * 0.06) if variation > 0.0 else color.darkened(-variation * 0.08)
 	# Los colores de vértice se pasan en espacio lineal (igual en Forward+ y Compatibility).
 	return color.srgb_to_linear()

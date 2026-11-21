@@ -248,6 +248,7 @@ func _objectives_done(id: String) -> bool:
 
 func _complete(id: String) -> void:
 	status[id] = "done"
+	_world().add_xp_all(SkillDB.XP["quest"])
 	var rewards: Dictionary = QuestDB.get_quest(id).get("rewards", {})
 	if not rewards.is_empty():
 		_world().give_to_all(rewards)

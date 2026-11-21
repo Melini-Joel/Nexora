@@ -24,7 +24,7 @@ const DEFAULTS := {
 	"last_ip": "127.0.0.1",
 }
 const WINDOW_MODES := {"windowed": "Ventana", "maximized": "Ventana maximizada", "fullscreen": "Pantalla completa"}
-const QUALITY_LEVELS := {"low": "Baja (más FPS)", "medium": "Media", "high": "Alta"}
+const QUALITY_LEVELS := {"low": "Baja (más FPS)", "medium": "Media", "high": "Alta", "ultra": "Ultra (PC potente)"}
 const RESOLUTIONS := ["1024x576", "1280x720", "1366x768", "1600x900", "1920x1080", "2560x1440", "3840x2160"]
 ## Distancias de cámara que se recorren con la tecla V.
 const CAMERA_PRESETS := {2.8: "Cerca", 4.5: "Normal", 7.0: "Lejos"}
@@ -131,7 +131,7 @@ func _apply_graphics(root: Viewport) -> void:
 		"low":
 			root.msaa_3d = Viewport.MSAA_DISABLED
 			root.scaling_3d_scale = 0.75
-		"high":
+		"high", "ultra":
 			root.msaa_3d = Viewport.MSAA_4X
 			root.scaling_3d_scale = 1.0
 		_:
