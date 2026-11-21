@@ -1,15 +1,19 @@
 extends Node3D
 ## El mundo compartido. Genera la isla (igual en todos los peers gracias a la semilla) y
 ## contiene la lógica autoritativa del servidor: aparición de jugadores, recolección,
-## inventarios y reaparición de recursos.
+## inventarios, bolsas en el suelo y reaparición de recursos.
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
+const DROP_SCENE := preload("res://scenes/item_drop.tscn")
 const TREE_COUNT := 260
-const ROCK_COUNT := 110
+const ROCK_COUNT := 130
+const ORE_CHANCE := 0.3  ## Porcentaje de rocas que tienen metal.
 const BUSH_COUNT := 450
 const RESPAWN_TIME := 90.0  ## Segundos hasta que reaparece un recurso agotado.
 const GATHER_RANGE := 6.0  ## Distancia máxima aceptada por el servidor (anti-trampas).
 const GATHER_MIN_INTERVAL_MS := 350
+const TOOL_MULTIPLIER := 3  ## Cuánto rinde la herramienta correcta frente a la mano.
+const STARTER_KIT := [["stone_hatchet", 1], ["stone_pickaxe", 1]]
 
 var generated := false
 var terrain: TerrainGenerator
@@ -20,8 +24,10 @@ var resource_nodes: Dictionary = {}
 
 # Solo en el servidor:
 var _respawn_timers: Dictionary = {}
-var _inventories: Dictionary = {}
+var _inventories: Dictionary = {}  ## peer_id -> Inventory
+var _saved_inventories: Dictionary = {}  ## nombre -> Array (para volver a entrar sin perder todo)
 var _last_gather_ms: Dictionary = {}
+var _drop_counter := 0
 
 var _crystal: Node3D
 var _crystal_base_y := 0.0
@@ -29,12 +35,15 @@ var _fire_light: OmniLight3D
 var _time := 0.0
 
 @onready var players_root: Node3D = $Players
+@onready var drops_root: Node3D = $Drops
 @onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
+@onready var drop_spawner: MultiplayerSpawner = $DropSpawner
 
 
 func _ready() -> void:
 	add_to_group("world")
 	player_spawner.add_spawnable_scene(PLAYER_SCENE.resource_path)
+	drop_spawner.add_spawnable_scene(DROP_SCENE.resource_path)
 	Network.player_joined.connect(_on_player_joined)
 	Network.player_left.connect(_on_player_left)
 
@@ -157,7 +166,8 @@ func _place_resources(world_seed: int) -> void:
 		var spot := _find_spot(rng, TerrainGenerator.WATER_LEVEL + 0.5, 30.0, 0.55, 3.0, used)
 		if spot == Vector3.INF:
 			continue
-		var rock := PropFactory.make_rock(rng)
+		var is_ore := rng.randf() < ORE_CHANCE
+		var rock := PropFactory.make_rock(rng, is_ore)
 		_add_resource(container, rock, "Rock_%d" % i, spot - Vector3(0, 0.2, 0), rng.randf() * TAU)
 
 
@@ -234,17 +244,32 @@ func get_spawn_point(peer_id: int) -> Vector3:
 func _on_player_joined(peer_id: int) -> void:
 	if players_root.has_node(str(peer_id)):
 		return
+	var player_name: String = Network.players[peer_id]["name"]
 	var player := PLAYER_SCENE.instantiate()
 	player.name = str(peer_id)
-	player.player_name = Network.players[peer_id]["name"]
+	player.player_name = player_name
 	player.position = get_spawn_point(peer_id)
 	player.sync_pos = player.position
 	players_root.add_child(player, true)
+
+	# Inventario: si ya había jugado en esta partida, recupera lo que tenía.
+	var inventory := Inventory.new()
+	if _saved_inventories.has(player_name):
+		inventory.load_from(_saved_inventories[player_name])
+		_saved_inventories.erase(player_name)
+	else:
+		for entry in STARTER_KIT:
+			inventory.add(entry[0], entry[1])
+	_inventories[peer_id] = inventory
+	_send_inventory(peer_id)
 
 
 func _on_player_left(peer_id: int) -> void:
 	var player := players_root.get_node_or_null(str(peer_id))
 	if player:
+		var inventory: Inventory = _inventories.get(peer_id)
+		if inventory:
+			_saved_inventories[player.player_name] = inventory.to_array()
 		player.queue_free()
 	_inventories.erase(peer_id)
 	_last_gather_ms.erase(peer_id)
@@ -260,21 +285,91 @@ func apply_state(state: Dictionary) -> void:
 		_set_node_state(node_name, true)
 
 
-# --- Recolección ---------------------------------------------------------------------
+# --- Acciones de los jugadores ---------------------------------------------------------
+# Todo pasa por el servidor: el cliente pide, el servidor valida y responde con el
+# inventario actualizado. Así nadie puede hacer trampa duplicando objetos.
 
-## Lo llama el jugador local al golpear un recurso.
-func gather(node_name: String) -> void:
+func send_action(action: String, args: Array = []) -> void:
 	if multiplayer.is_server():
-		_server_gather(1, node_name)
+		_handle_action(multiplayer.get_unique_id(), action, args)
 	else:
-		request_gather.rpc_id(1, node_name)
+		_request_action.rpc_id(1, action, args)
 
 
 @rpc("any_peer", "reliable")
-func request_gather(node_name: String) -> void:
+func _request_action(action: String, args: Array) -> void:
 	if multiplayer.is_server():
-		_server_gather(multiplayer.get_remote_sender_id(), node_name)
+		_handle_action(multiplayer.get_remote_sender_id(), action, args)
 
+
+func _handle_action(peer_id: int, action: String, args: Array) -> void:
+	var inventory: Inventory = _inventories.get(peer_id)
+	if inventory == null:
+		return
+	var changed := false
+	match action:
+		"gather":
+			if args.size() == 1:
+				_server_gather(peer_id, str(args[0]))
+		"pickup":
+			if args.size() == 1:
+				_server_pickup(peer_id, str(args[0]))
+		"move":
+			if args.size() == 2:
+				changed = inventory.move(int(args[0]), int(args[1]))
+		"split":
+			if args.size() == 1:
+				changed = inventory.split(int(args[0]))
+		"quick_move":
+			if args.size() == 1:
+				changed = inventory.quick_move(int(args[0]))
+		"drop":
+			if args.size() == 1:
+				var stack := inventory.take(int(args[0]))
+				if not stack.is_empty():
+					_spawn_drop(stack["id"], stack["count"], _drop_position(peer_id))
+					changed = true
+	if changed:
+		_send_inventory(peer_id)
+
+
+func _send_inventory(peer_id: int) -> void:
+	var data: Array = _inventories[peer_id].to_array()
+	if peer_id == multiplayer.get_unique_id():
+		_receive_inventory(data)
+	else:
+		_receive_inventory.rpc_id(peer_id, data)
+
+
+@rpc("authority", "reliable")
+func _receive_inventory(slots: Array) -> void:
+	Game.set_inventory(slots)
+
+
+func _notify_peer(peer_id: int, text: String) -> void:
+	if peer_id == multiplayer.get_unique_id():
+		_notify(text)
+	else:
+		_notify.rpc_id(peer_id, text)
+
+
+@rpc("authority", "reliable")
+func _notify(text: String) -> void:
+	Game.notify.emit(text)
+
+
+## Da ítems a un jugador. Si no le entran, se tiran al suelo en una bolsa.
+func _give(peer_id: int, id: String, amount: int) -> void:
+	var inventory: Inventory = _inventories[peer_id]
+	var leftover := inventory.add(id, amount)
+	if leftover < amount:
+		_send_inventory(peer_id)
+	if leftover > 0:
+		_spawn_drop(id, leftover, _drop_position(peer_id))
+		_notify_peer(peer_id, "Inventario lleno: %s x%d quedó en el suelo" % [ItemDB.item_name(id), leftover])
+
+
+# --- Recolección ---------------------------------------------------------------------
 
 func _server_gather(peer_id: int, node_name: String) -> void:
 	var node: ResourceNode = resource_nodes.get(node_name)
@@ -291,29 +386,19 @@ func _server_gather(peer_id: int, node_name: String) -> void:
 		return
 	_last_gather_ms[peer_id] = now
 
+	# La herramienta correcta en la mano rinde más.
+	var inventory: Inventory = _inventories[peer_id]
+	var held: String = inventory.get_slot(int(player.selected_slot)).get("id", "")
+	var amount := TOOL_MULTIPLIER if ItemDB.tool_type(held) == node.preferred_tool else 1
+
 	node.hits_left -= 1
-	_add_item(peer_id, node.resource_type, 1)
-	QuestManager.report_collect(node.resource_type, 1)
+	_give(peer_id, node.resource_type, amount)
+	QuestManager.report_collect(node.resource_type, amount)
 	if node.hits_left <= 0:
 		_respawn_timers[node_name] = RESPAWN_TIME
 		_set_node_state.rpc(node_name, true)
 	else:
 		_play_node_hit.rpc(node_name)
-
-
-func _add_item(peer_id: int, item: String, amount: int) -> void:
-	var inventory: Dictionary = _inventories.get(peer_id, {})
-	inventory[item] = int(inventory.get(item, 0)) + amount
-	_inventories[peer_id] = inventory
-	if peer_id == multiplayer.get_unique_id():
-		_receive_inventory(inventory)
-	else:
-		_receive_inventory.rpc_id(peer_id, inventory)
-
-
-@rpc("authority", "reliable")
-func _receive_inventory(inventory: Dictionary) -> void:
-	Game.set_inventory(inventory.duplicate())
 
 
 @rpc("authority", "call_local", "reliable")
@@ -336,6 +421,48 @@ func _update_respawns(delta: float) -> void:
 		if _respawn_timers[node_name] <= 0.0:
 			_respawn_timers.erase(node_name)
 			_set_node_state.rpc(node_name, false)
+
+
+# --- Bolsas en el suelo -----------------------------------------------------------------
+
+func _spawn_drop(id: String, count: int, pos: Vector3) -> void:
+	_drop_counter += 1
+	var drop := DROP_SCENE.instantiate()
+	drop.name = "Drop_%d" % _drop_counter
+	drop.item_id = id
+	drop.count = count
+	drop.position = pos
+	drops_root.add_child(drop, true)
+
+
+func _drop_position(peer_id: int) -> Vector3:
+	var player := players_root.get_node_or_null(str(peer_id))
+	if player == null:
+		return landmarks.get("spawn", Vector3.ZERO)
+	var rot: float = player.sync_rot
+	var pos: Vector3 = player.sync_pos + Vector3(-sin(rot), 0, -cos(rot)) * 1.3
+	pos += Vector3(randf_range(-0.4, 0.4), 0, randf_range(-0.4, 0.4))
+	pos.y = maxf(terrain.get_height(pos.x, pos.z), TerrainGenerator.WATER_LEVEL - 0.3)
+	return pos
+
+
+func _server_pickup(peer_id: int, drop_name: String) -> void:
+	var drop := drops_root.get_node_or_null(drop_name)
+	var player := players_root.get_node_or_null(str(peer_id))
+	if drop == null or player == null or drop.is_queued_for_deletion():
+		return
+	var player_pos: Vector3 = player.sync_pos
+	if player_pos.distance_to(drop.global_position) > GATHER_RANGE:
+		return
+	var leftover: int = _inventories[peer_id].add(drop.item_id, drop.count)
+	if leftover == drop.count:
+		_notify_peer(peer_id, "No tenés lugar en el inventario")
+		return
+	_send_inventory(peer_id)
+	if leftover == 0:
+		drop.queue_free()
+	else:
+		drop.count = leftover
 
 
 # --- Cinemáticas ---------------------------------------------------------------------

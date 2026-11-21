@@ -1,8 +1,10 @@
 extends CanvasLayer
-## HUD del juego: mochila, misión actual, jugadores conectados, mira, avisos y menú de pausa.
+## HUD del juego: misión actual, jugadores conectados, mira, avisos y menú de pausa.
+## El inventario y la barra rápida están en inventory_ui.gd.
+
+const InventoryUI := preload("res://scripts/ui/inventory_ui.gd")
 
 var _root: Control
-var _inventory_box: VBoxContainer
 var _quest_title: Label
 var _quest_description: Label
 var _quest_objectives: VBoxContainer
@@ -11,7 +13,8 @@ var _hint: Label
 var _pickup_box: VBoxContainer
 var _notifications: VBoxContainer
 var _pause_overlay: Control
-var _last_inventory: Dictionary = {}
+var _last_totals: Dictionary = {}
+var _crosshair: Label
 
 
 func _ready() -> void:
@@ -21,7 +24,7 @@ func _ready() -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	_build_inventory_panel()
+	_build_players_panel()
 	_build_quest_panel()
 	_build_center()
 	_build_bottom()
@@ -31,31 +34,27 @@ func _ready() -> void:
 	Game.notify.connect(show_notification)
 	Game.interaction_hint_changed.connect(func(text: String): _hint.text = text)
 	Game.pause_toggled.connect(func(is_open: bool): _pause_overlay.visible = is_open)
+	Game.inventory_toggled.connect(func(is_open: bool): _crosshair.visible = not is_open)
 	QuestManager.quest_changed.connect(_refresh_quest)
 	Network.players_changed.connect(_refresh_players)
 	Cinematics.started.connect(func(): _root.visible = false)
 	Cinematics.finished.connect(func(): _root.visible = true)
 
 	_root.visible = not Cinematics.playing
-	_refresh_inventory()
+	add_child(InventoryUI.new())
+	_last_totals = _item_totals()
 	_refresh_quest()
 	_refresh_players()
 
 
 # --- Construcción ------------------------------------------------------------------
 
-func _build_inventory_panel() -> void:
-	var panel := UIStyle.panel()
+func _build_players_panel() -> void:
+	var panel := UIStyle.panel(UIStyle.PANEL_BG, 10)
 	panel.position = Vector2(20, 20)
 	_root.add_child(panel)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
-	panel.add_child(box)
-	box.add_child(UIStyle.label("Mochila", 20, UIStyle.ACCENT))
-	_inventory_box = VBoxContainer.new()
-	box.add_child(_inventory_box)
 	_players_label = UIStyle.label("", 15, UIStyle.TEXT_DIM)
-	box.add_child(_players_label)
+	panel.add_child(_players_label)
 
 
 func _build_quest_panel() -> void:
@@ -83,6 +82,7 @@ func _build_quest_panel() -> void:
 
 func _build_center() -> void:
 	var crosshair := UIStyle.label("+", 22)
+	_crosshair = crosshair
 	crosshair.set_anchors_preset(Control.PRESET_CENTER)
 	crosshair.offset_left = -20
 	crosshair.offset_right = 20
@@ -119,22 +119,19 @@ func _build_bottom() -> void:
 	_notifications.anchor_bottom = 1.0
 	_notifications.offset_left = 20
 	_notifications.offset_right = 620
-	_notifications.offset_top = -260
-	_notifications.offset_bottom = -20
+	_notifications.offset_top = -330
+	_notifications.offset_bottom = -72
 	_notifications.alignment = BoxContainer.ALIGNMENT_END
 	_notifications.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_notifications)
 
-	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · E / Click recolectar · Esc menú", 14, UIStyle.TEXT_DIM)
-	help.anchor_left = 1.0
-	help.anchor_right = 1.0
+	var help := UIStyle.label("WASD mover · Shift correr · Espacio saltar · Click golpear · E recoger\n1-6 / rueda: barra rápida · Tab inventario · Esc menú", 13, UIStyle.TEXT_DIM)
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
-	help.offset_left = -700
-	help.offset_right = -20
-	help.offset_top = -40
+	help.offset_left = 20
+	help.offset_right = 520
+	help.offset_top = -60
 	help.offset_bottom = -16
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	help.modulate = Color(1, 1, 1, 0.7)
 	_root.add_child(help)
 
@@ -172,31 +169,22 @@ func _build_pause_menu() -> void:
 
 # --- Actualización -------------------------------------------------------------------
 
+func _item_totals() -> Dictionary:
+	var totals := {}
+	for slot in Game.inventory:
+		if not slot.is_empty():
+			totals[slot["id"]] = int(totals.get(slot["id"], 0)) + slot["count"]
+	return totals
+
+
+## Muestra "+3 Madera" junto a la mira cuando entra algo nuevo al inventario.
 func _on_inventory_changed() -> void:
-	for item in Game.inventory:
-		var gained: int = Game.inventory[item] - int(_last_inventory.get(item, 0))
+	var totals := _item_totals()
+	for item in totals:
+		var gained: int = totals[item] - int(_last_totals.get(item, 0))
 		if gained > 0:
-			_show_pickup("+%d %s" % [gained, Game.item_name(item)], Game.item_color(item))
-	_last_inventory = Game.inventory.duplicate()
-	_refresh_inventory()
-
-
-func _refresh_inventory() -> void:
-	for child in _inventory_box.get_children():
-		child.queue_free()
-	if Game.inventory.is_empty():
-		_inventory_box.add_child(UIStyle.label("Vacía", 16, UIStyle.TEXT_DIM))
-		return
-	for item in Game.inventory:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		var swatch := ColorRect.new()
-		swatch.color = Game.item_color(item)
-		swatch.custom_minimum_size = Vector2(14, 14)
-		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(swatch)
-		row.add_child(UIStyle.label("%s  x%d" % [Game.item_name(item), Game.inventory[item]], 17))
-		_inventory_box.add_child(row)
+			_show_pickup("+%d %s" % [gained, ItemDB.item_name(item)], ItemDB.color(item))
+	_last_totals = totals
 
 
 func _refresh_quest() -> void:

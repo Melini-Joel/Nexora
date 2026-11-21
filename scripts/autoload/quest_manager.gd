@@ -11,17 +11,17 @@ signal quest_changed
 const QUESTS := [
 	{
 		"title": "Un nuevo comienzo",
-		"description": "El grupo despertó en una isla desconocida. Junten madera para reforzar el campamento.",
+		"description": "El grupo despertó en una isla desconocida. Equipen el hacha (tecla 1) y junten madera.",
 		"objectives": [
-			{"type": "collect", "item": "wood", "amount": 10, "text": "Talar árboles"},
+			{"type": "collect", "item": "wood", "amount": 30, "text": "Talar árboles"},
 		],
 	},
 	{
 		"title": "Herramientas de piedra",
-		"description": "Con piedra y madera podremos fabricar mejores herramientas.",
+		"description": "Las rocas oscuras con vetas naranjas tienen metal. Usen el pico.",
 		"objectives": [
-			{"type": "collect", "item": "stone", "amount": 8, "text": "Picar rocas"},
-			{"type": "collect", "item": "wood", "amount": 6, "text": "Más madera"},
+			{"type": "collect", "item": "stone", "amount": 25, "text": "Picar rocas"},
+			{"type": "collect", "item": "metal_ore", "amount": 10, "text": "Juntar mineral de metal"},
 		],
 		"on_complete_cinematic": "reveal_monolith",
 	},

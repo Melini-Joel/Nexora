@@ -13,3 +13,8 @@ script = ExtResource("2_world")
 
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="World"]
 spawn_path = NodePath("../Players")
+
+[node name="Drops" type="Node3D" parent="World"]
+
+[node name="DropSpawner" type="MultiplayerSpawner" parent="World"]
+spawn_path = NodePath("../Drops")

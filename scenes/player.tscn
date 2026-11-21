@@ -19,6 +19,15 @@ properties/2/replication_mode = 1
 properties/3/path = NodePath(".:sync_rot")
 properties/3/spawn = true
 properties/3/replication_mode = 1
+properties/4/path = NodePath(".:selected_slot")
+properties/4/spawn = true
+properties/4/replication_mode = 2
+properties/5/path = NodePath(".:held_item")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+properties/6/path = NodePath(".:load_ratio")
+properties/6/spawn = true
+properties/6/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_player")

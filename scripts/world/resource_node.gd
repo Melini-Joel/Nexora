@@ -6,14 +6,16 @@ extends StaticBody3D
 var resource_type := "wood"
 var display_name := "árbol"
 var action_name := "Talar"
+var preferred_tool := "hatchet"  ## Herramienta que rinde más con este recurso.
 var max_hits := 5
 var hits_left := 5
 var depleted := false
 var visual: Node3D
 
 
-func setup(type: String, p_display_name: String, p_action_name: String, hits: int) -> void:
+func setup(type: String, p_display_name: String, p_action_name: String, hits: int, tool: String) -> void:
 	resource_type = type
+	preferred_tool = tool
 	display_name = p_display_name
 	action_name = p_action_name
 	max_hits = hits

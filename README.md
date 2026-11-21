@@ -3,7 +3,7 @@
 RPG cooperativo de mundo abierto en 3D (2 a 6 jugadores) hecho con **Godot 4.3+** y **GDScript**.
 Estilo low-poly: liviano para cualquier PC, pero con iluminación, sombras, niebla y brillo.
 
-![Gameplay](docs/02_gameplay.png)
+![Inventario](docs/05_inventario.png)
 
 ## Cómo abrirlo
 
@@ -38,13 +38,30 @@ godot --path . -- --join=127.0.0.1 --name=Beto
 | Mouse | Cámara |
 | Shift | Correr |
 | Espacio | Saltar |
-| E / Click izquierdo (mantener) | Talar árboles / picar rocas |
-| Esc | Menú de pausa · saltear cinemática |
+| Click izquierdo (mantener) | Talar árboles / picar rocas |
+| E | Recoger bolsas del suelo |
+| 1-6 / rueda del mouse | Elegir objeto de la barra rápida |
+| Tab / I | Abrir inventario |
+| Esc | Cerrar inventario · menú de pausa · saltear cinemática |
+
+### Inventario
+
+| Acción | Resultado |
+|---|---|
+| Arrastrar a otro casillero | Mover, juntar pilas o intercambiar |
+| Shift + Click | Mover rápido entre barra rápida y mochila |
+| Click derecho | Dividir la pila a la mitad |
+| Soltar fuera del inventario | Tirar al suelo en una bolsa (cualquier compañero la puede recoger) |
 
 ## Qué incluye este prototipo
 
 - **Isla procedural** de 256 × 256 m generada con una semilla compartida: todos los jugadores ven el mismo mundo sin enviar el terreno por red.
-- **Recursos:** árboles (madera) y rocas (piedra), que reaparecen a los 90 segundos.
+- **Recursos:** árboles (madera), rocas (piedra) y rocas con vetas naranjas (mineral de metal). Reaparecen a los 90 segundos.
+- **Inventario por casilleros:** 6 de barra rápida + 24 de mochila, con pilas, arrastrar y soltar, dividir y tirar al suelo.
+- **Peso:** cada objeto pesa. Hasta el 40% de la capacidad (40 kg) te movés normal. Después vas cada vez más lento, y si te pasás de la capacidad quedás sobrecargado: sin correr y con saltos cortos. La mochila del personaje crece a la vista.
+- **Herramientas:** con el hacha o el pico en la mano sacás el triple de recursos. Arrancás con las dos.
+- **Bolsas en el suelo:** si se te llena el inventario, lo que no entra cae al piso. Cualquiera puede recogerlo y desaparece a los 5 minutos.
+- **Volver a entrar:** si salís y volvés a la misma partida con el mismo nombre, recuperás tu inventario.
 - **Multiplayer cooperativo** de 2 a 6 jugadores con ENet. El host es la autoridad: valida la distancia y el ritmo de recolección y lleva los inventarios.
 - **Misiones compartidas:** el progreso es del grupo entero. Hay 3 misiones de ejemplo: recolectar, recolectar y llegar a un lugar.
 - **Cinemáticas:** planos de cámara con barras negras, subtítulos y fundidos. Hay una intro, la revelación del monolito y el final de la demo.
@@ -60,7 +77,7 @@ scenes/
 scripts/
   main.gd              Menú → mundo, argumentos de línea de comandos
   autoload/
-    game.gd            Estado local: inventario, ítems, controles, pausa
+    game.gd            Estado local: inventario, barra rápida, peso, controles, pausa
     network.gd         Host / unirse, registro de jugadores (ENet)
     quest_manager.gd   Misiones cooperativas (datos + lógica del servidor)
     cinematics.gd      Reproductor de cinemáticas
@@ -69,26 +86,35 @@ scripts/
     terrain_generator.gd  Terreno low-poly procedural
     prop_factory.gd    Modelos low-poly por código (árboles, rocas, monolito, fogata)
     resource_node.gd   Recurso recolectable
-  player/player.gd     Movimiento, cámara 3ª persona, interacción
-  ui/                  Menú principal, HUD y estilos
+  data/
+    item_db.gd         Todos los ítems (nombre, peso, pila, herramienta)
+    inventory.gd       Lógica del inventario (agregar, mover, dividir, peso)
+  world/item_drop.gd   Bolsa en el suelo
+  player/player.gd     Movimiento, peso, cámara 3ª persona, herramientas, interacción
+  ui/
+    inventory_ui.gd    Barra rápida, ventana de inventario, indicador de carga
+    item_slot.gd       Casillero con arrastrar y soltar
+    item_icon.gd       Íconos dibujados por código
 ```
 
 ### Cómo agregar cosas
 
 - **Una misión nueva:** agregá un diccionario a `QUESTS` en `quest_manager.gd`.
 - **Una cinemática:** agregá un caso en `build_cinematic()` de `world.gd`. Cada plano tiene posición inicial y final de la cámara, el punto al que mira, la duración y el texto.
-- **Un ítem:** agregalo en `ITEMS` de `game.gd`.
+- **Un ítem:** agregalo en `ITEMS` de `scripts/data/item_db.gd` (nombre, peso, pila) y su ícono en `item_icon.gd`.
+- **Cambiar cuánto se puede cargar:** `CAPACITY_KG` en `scripts/data/inventory.gd`.
 
 ## Hoja de ruta
 
 1. ~~Prototipo base: mundo, jugador, cooperativo~~ ✅
 2. ~~Recolección de madera y piedra~~ ✅
 3. ~~Misiones y cinemáticas básicas~~ ✅
-4. **Crafteo:** mesa de trabajo y recetas (hacha de piedra, antorcha…)
-5. **Construcción:** piezas con encaje (piso, pared, techo) de madera y piedra
-6. **NPCs con diálogos** y cadenas de misiones
-7. Ciclo día/noche, clima y biomas
-8. Enemigos y combate cooperativo
-9. Guardado de partida (mundo, construcciones, inventarios)
-10. Personajes animados (Mixamo o Blender) y sonido
-11. Mundo más grande por zonas, menú de opciones gráficas
+4. ~~Inventario por casilleros, peso y herramientas~~ ✅
+5. **Crafteo:** mesa de trabajo y recetas (hacha de piedra, antorcha…)
+6. **Construcción:** piezas con encaje (piso, pared, techo) de madera y piedra
+7. **NPCs con diálogos** y cadenas de misiones
+8. Ciclo día/noche, clima y biomas
+9. Enemigos y combate cooperativo
+10. Guardado de partida (mundo, construcciones, inventarios)
+11. Personajes animados (Mixamo o Blender) y sonido
+12. Mundo más grande por zonas, menú de opciones gráficas

@@ -7,6 +7,9 @@ extends RefCounted
 const BARK := Color(0.45, 0.3, 0.18)
 const LEAVES := [Color(0.25, 0.52, 0.22), Color(0.33, 0.6, 0.25), Color(0.2, 0.45, 0.27)]
 const STONE := Color(0.56, 0.55, 0.53)
+const ORE_STONE := Color(0.4, 0.38, 0.37)
+const ORE := Color(0.9, 0.55, 0.2)
+const SACK := Color(0.55, 0.42, 0.28)
 const DARK_STONE := Color(0.24, 0.25, 0.3)
 const CRYSTAL := Color(0.35, 0.9, 1.0)
 const FIRE := Color(1.0, 0.55, 0.15)
@@ -128,7 +131,7 @@ static func make_tree(rng: RandomNumberGenerator) -> ResourceNode:
 	var leaves: Color = LEAVES[rng.randi() % LEAVES.size()]
 
 	var node := ResourceNode.new()
-	node.setup("wood", "árbol", "Talar", 5)
+	node.setup("wood", "árbol", "Talar", 5, "hatchet")
 	var visual := Node3D.new()
 	visual.name = "Visual"
 	_add_mesh(visual, trunk_mesh(), Vector3(0, 1.2, 0))
@@ -153,17 +156,24 @@ static func make_tree(rng: RandomNumberGenerator) -> ResourceNode:
 	return node
 
 
-static func make_rock(rng: RandomNumberGenerator) -> ResourceNode:
+static func make_rock(rng: RandomNumberGenerator, is_ore: bool) -> ResourceNode:
 	var s := rng.randf_range(0.7, 1.3)
 	var variant := rng.randi() % 4
 	var stretch_x := rng.randf_range(0.9, 1.4)
 	var stretch_z := rng.randf_range(0.9, 1.4)
 
 	var node := ResourceNode.new()
-	node.setup("stone", "roca", "Picar", 4)
 	var visual := Node3D.new()
 	visual.name = "Visual"
-	_add_mesh(visual, blob_mesh(1.0, STONE, 0.22, variant), Vector3(0, 0.3, 0))
+	if is_ore:
+		node.setup("metal_ore", "roca con metal", "Picar", 5, "pickaxe")
+		_add_mesh(visual, blob_mesh(1.0, ORE_STONE, 0.22, variant), Vector3(0, 0.3, 0))
+		# Vetas de metal que brillan un poco.
+		for vein in [Vector3(0.55, 0.55, 0.3), Vector3(-0.4, 0.7, 0.45), Vector3(0.1, 0.5, -0.7), Vector3(-0.6, 0.35, -0.3)]:
+			_add_mesh(visual, blob_mesh(0.2, ORE, 0.05, variant), vein)
+	else:
+		node.setup("stone", "roca", "Picar", 4, "pickaxe")
+		_add_mesh(visual, blob_mesh(1.0, STONE, 0.22, variant), Vector3(0, 0.3, 0))
 	visual.scale = Vector3(s * stretch_x, s, s * stretch_z)
 	node.add_child(visual)
 	node.visual = visual
