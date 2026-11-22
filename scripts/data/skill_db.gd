@@ -18,7 +18,8 @@ const SKILLS := {
 ## Experiencia que da cada acción.
 const XP := {
 	"gather": 2, "craft": 5, "build": 8, "chest": 12, "quest": 120, "tame": 60,
-	"kill_animal": 15, "kill_shade": 25, "kill_brute": 70,
+	"kill_animal": 15, "kill_shade": 25, "kill_brute": 70, "kill_bandit": 40, "kill_bandit_chief": 200,
+	"ship_stage": 150, "trade": 3,
 }
 
 

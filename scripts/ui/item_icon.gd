@@ -67,6 +67,39 @@ func _draw() -> void:
 			for i in 4:
 				draw_line(_p(0.25, 0.3 + i * 0.12), _p(0.75, 0.3 + i * 0.12), Color(1, 1, 1, 0.35), 1.0)
 			draw_rect(Rect2(_p(0.3, 0.35), _p(0.3, 0.3)), Color(1, 1, 1, 0.8), false, 2.0)
+		"plank":
+			for i in 3:
+				var y := 0.3 + i * 0.16
+				draw_rect(Rect2(_p(0.16, y), _p(0.68, 0.12)), c.darkened(0.08 * i))
+				draw_line(_p(0.2, y + 0.06), _p(0.8, y + 0.06), c.darkened(0.25), 1.0)
+		"rope":
+			for i in 3:
+				draw_arc(_p(0.5, 0.5), size.x * (0.14 + i * 0.09), 0.0, TAU, 20, c.darkened(0.1 * i), size.x * 0.06)
+			draw_line(_p(0.72, 0.62), _p(0.88, 0.86), c, size.x * 0.06)
+		"nails":
+			for i in 4:
+				var x := 0.26 + i * 0.15
+				draw_line(_p(x, 0.3 + (i % 2) * 0.06), _p(x + 0.04, 0.82), c, size.x * 0.05)
+				draw_line(_p(x - 0.06, 0.3 + (i % 2) * 0.06), _p(x + 0.06, 0.3 + (i % 2) * 0.06), c.lightened(0.2), size.x * 0.06)
+		"cloth":
+			_poly([Vector2(0.2, 0.25), Vector2(0.8, 0.2), Vector2(0.75, 0.8), Vector2(0.25, 0.78)], c)
+			_poly([Vector2(0.55, 0.2), Vector2(0.8, 0.2), Vector2(0.75, 0.8), Vector2(0.6, 0.79)], c.darkened(0.12))
+			draw_line(_p(0.22, 0.5), _p(0.78, 0.48), c.darkened(0.25), 1.0)
+		"coin":
+			for p in [Vector2(0.4, 0.62), Vector2(0.58, 0.5), Vector2(0.44, 0.4)]:
+				draw_circle(_p(p.x, p.y), size.x * 0.17, c.darkened(0.25))
+				draw_circle(_p(p.x, p.y - 0.02), size.x * 0.16, c)
+				draw_circle(_p(p.x, p.y - 0.02), size.x * 0.09, c.lightened(0.3))
+		"wheat":
+			for i in 3:
+				var x := 0.38 + i * 0.12
+				draw_line(_p(0.5, 0.88), _p(x, 0.25), Color(0.75, 0.62, 0.3), size.x * 0.035)
+				for k in 4:
+					draw_circle(_p(x + (0.5 - x) * (0.05 + k * 0.08), 0.24 + k * 0.08), size.x * 0.045, c)
+		"bread":
+			_poly([Vector2(0.16, 0.62), Vector2(0.24, 0.4), Vector2(0.5, 0.3), Vector2(0.76, 0.4), Vector2(0.84, 0.62), Vector2(0.5, 0.72)], c)
+			for i in 3:
+				draw_line(_p(0.34 + i * 0.13, 0.42), _p(0.42 + i * 0.13, 0.52), c.lightened(0.35), size.x * 0.04)
 		_:
 			draw_circle(size * 0.5, size.x * 0.3, c)
 

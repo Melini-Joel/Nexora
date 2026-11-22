@@ -323,7 +323,7 @@ func _physics_process(delta: float) -> void:
 	if direction.length() > 0.1:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(-direction.x, -direction.z), clampf(delta * 12.0, 0.0, 1.0))
 	if global_position.y < -25.0:
-		global_position = _world.get_spawn_point(str(name).to_int())
+		global_position = _world.get_spawn_point(str(name).to_int(), _world.region_near(global_position))
 		velocity = Vector3.ZERO
 
 	_animate(Vector2(velocity.x, velocity.z).length(), is_on_floor(), velocity.y)
@@ -400,7 +400,7 @@ func _update_focus() -> void:
 			var collider: Object = hit["collider"]
 			_focus_point = hit["position"]
 			if collider is CollisionObject3D and not (collider is BuildPiece or collider is Station or collider is LootChest
-					or collider is NPC or collider is ItemDrop or collider is ResourceNode or collider is Creature):
+					or collider is NPC or collider is ItemDrop or collider is ResourceNode or collider is Creature or collider is Interactable):
 				var parent: Node = collider.get_parent()
 				if parent is BuildPiece or parent is Station:
 					collider = parent
@@ -423,13 +423,13 @@ func _is_interesting(target: Object) -> bool:
 		return not target.dead
 	if target is LootChest:
 		return not target.opened
-	return target is ItemDrop or target is NPC or target is Station or target is BuildPiece
+	return target is ItemDrop or target is NPC or target is Station or target is BuildPiece or target is Interactable
 
 
 func _hint_for(target: Node) -> String:
 	if target == null:
 		return ""
-	if target is ItemDrop or target is NPC or target is Station or target is LootChest:
+	if target is ItemDrop or target is NPC or target is Station or target is LootChest or target is Interactable:
 		return "[E] %s" % target.get_interact_text()
 	if target is BuildPiece:
 		var lines: Array[String] = []
@@ -478,6 +478,8 @@ func _handle_actions(delta: float) -> void:
 		if _focused is NPC:
 			Game.send_action("talk", [_focused.npc_id])
 			Game.open_dialog(_focused.npc_id)
+		elif _focused is Interactable:
+			Game.open_dialog(_focused.dialog_id)
 		elif _focused is ItemDrop:
 			Game.send_action("pickup", [str(_focused.name)])
 		elif _focused is Station:

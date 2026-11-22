@@ -16,7 +16,7 @@ const TINT_BY_BIOME := {
 const QUALITY := {"low": [220, 40.0], "medium": [600, 70.0], "high": [1000, 100.0], "ultra": [1500, 130.0]}  ## [matas por parcela, distancia visible]
 
 var terrain: TerrainGenerator
-var _pending: Array[Vector2i] = []
+var _pending: Array[Vector2] = []  ## Esquina de cada parcela que falta generar.
 var _mesh: ArrayMesh
 var _material: ShaderMaterial
 var _per_chunk := 480
@@ -33,10 +33,12 @@ func setup(p_terrain: TerrainGenerator, world_seed: int) -> void:
 	_mesh = _build_tuft_mesh()
 	_material = ShaderMaterial.new()
 	_material.shader = load("res://shaders/grass.gdshader")
-	var count := int(TerrainGenerator.SIZE / CHUNK)
-	for cz in count:
-		for cx in count:
-			_pending.append(Vector2i(cx, cz))
+	for region in terrain.regions:
+		var corner := region.center - Vector2.ONE * region.size * 0.5
+		var count := int(region.size / CHUNK)
+		for cz in count:
+			for cx in count:
+				_pending.append(corner + Vector2(cx, cz) * CHUNK)
 
 
 func _process(_delta: float) -> void:
@@ -48,25 +50,18 @@ func _process(_delta: float) -> void:
 	var best_index := 0
 	var best_distance := INF
 	for i in _pending.size():
-		var d := _chunk_center(_pending[i]).distance_squared_to(Vector2(focus.x, focus.z))
+		var d := (_pending[i] + Vector2.ONE * CHUNK * 0.5).distance_squared_to(Vector2(focus.x, focus.z))
 		if d < best_distance:
 			best_distance = d
 			best_index = i
-	var chunk: Vector2i = _pending[best_index]
+	var chunk: Vector2 = _pending[best_index]
 	_pending.remove_at(best_index)
 	_build_chunk(chunk)
 
 
-func _chunk_center(chunk: Vector2i) -> Vector2:
-	var half := TerrainGenerator.SIZE * 0.5
-	return Vector2(-half + (chunk.x + 0.5) * CHUNK, -half + (chunk.y + 0.5) * CHUNK)
-
-
-func _build_chunk(chunk: Vector2i) -> void:
+func _build_chunk(origin: Vector2) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = _seed + chunk.x * 7919 + chunk.y * 104729
-	var half := TerrainGenerator.SIZE * 0.5
-	var origin := Vector2(-half + chunk.x * CHUNK, -half + chunk.y * CHUNK)
+	rng.seed = _seed + int(origin.x) * 7919 + int(origin.y) * 3301
 	var transforms: Array[Transform3D] = []
 	var colors: Array[Color] = []
 	for i in _per_chunk:

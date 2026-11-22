@@ -53,6 +53,8 @@ class Compass extends Control:
 			for objective in QuestDB.get_quest(id)["objectives"]:
 				if objective["type"] == "reach":
 					markers.append([world.landmarks.get(objective["target"], Vector3.INF), Color(1, 0.8, 0.2)])
+				elif objective["type"] in ["ship", "sail"]:
+					markers.append([world.landmarks.get("wreck", Vector3.INF), Color(1, 0.8, 0.2)])
 		for marker in markers:
 			var target: Vector3 = marker[0]
 			if target == Vector3.INF:
@@ -299,9 +301,13 @@ func _refresh_quest() -> void:
 		hint.custom_minimum_size = Vector2(350, 0)
 		_quest_objectives.add_child(hint)
 		return
-	for id in active.slice(0, 4):
+	# La historia principal va primero, marcada con una estrella.
+	var sorted: Array = active.filter(func(q: String) -> bool: return QuestDB.get_quest(q).get("main", false))
+	sorted.append_array(active.filter(func(q: String) -> bool: return not QuestDB.get_quest(q).get("main", false)))
+	for id in sorted.slice(0, 4):
 		var quest := QuestDB.get_quest(id)
-		_quest_objectives.add_child(UIStyle.label(quest["title"], 19, UIStyle.ACCENT))
+		var main: bool = quest.get("main", false)
+		_quest_objectives.add_child(UIStyle.label(("★ " if main else "") + quest["title"], 19, Color(1.0, 0.82, 0.35) if main else UIStyle.ACCENT))
 		if QuestManager.get_status(id) == "ready" and QuestManager.missing_delivery(id).is_empty():
 			_quest_objectives.add_child(UIStyle.label("  → Volvé con %s para entregarla" % NpcDB.display_name(quest.get("giver", "")), 15, UIStyle.SUCCESS))
 			continue
@@ -313,6 +319,9 @@ func _refresh_quest() -> void:
 			var text: String
 			if objective["type"] in ["collect", "craft", "deliver"]:
 				text = "  • %s: %d / %d" % [objective["text"], current, objective["amount"]]
+			elif objective["type"] == "ship" and not done:
+				var world := get_tree().get_first_node_in_group("world")
+				text = "  • %s\n     %s" % [objective["text"], world.ship_progress_text(objective["item"]) if world else ""]
 			else:
 				text = "  • %s%s" % [objective["text"], " (hecho)" if done else ""]
 			_quest_objectives.add_child(UIStyle.label(text, 15, UIStyle.SUCCESS if done else UIStyle.TEXT))
@@ -452,7 +461,15 @@ func _update_world_info() -> void:
 	_was_night = night
 	var player := Game.local_player
 	if player:
-		var biome: String = TerrainGenerator.BIOME_NAMES[world.terrain.get_biome(player.global_position.x, player.global_position.z)]
+		var pos: Vector3 = player.global_position
+		var biome: String = TerrainGenerator.BIOME_NAMES[world.terrain.get_biome(pos.x, pos.z)]
+		var place: String = world.place_name(pos)
+		if place != "":
+			biome = place
+		elif world.terrain.region_at(pos.x, pos.z) == "mainland":
+			biome = "Valdoria · " + biome
+		elif world.terrain.region_at(pos.x, pos.z) == "":
+			biome = "Mar abierto"
 		_biome.text = biome
 		if biome != _last_biome and _last_biome != "":
 			show_notification("Entraste a: %s" % biome)

@@ -130,6 +130,37 @@ func _add_accessory(kind: String, hair: Color, shirt: Color) -> void:
 			_part(spine, _box(Vector3(0.3, 0.6, 0.02)), Color(0.4, 0.28, 0.17), Vector3(0, 0.12, -0.18))
 		"bun":
 			_part(head, _sphere(0.07, 0.14), hair, Vector3(0, 0.2, 0.12))
+		# --- Valdoria (medieval) ---
+		"crown":
+			var gold := Color(1.0, 0.8, 0.25)
+			_part(head, _cylinder(0.14, 0.14, 0.07), gold, Vector3(0, 0.25, 0))
+			for i in 5:
+				var angle := TAU * i / 5.0
+				_part(head, _box(Vector3(0.04, 0.07, 0.03)), gold, Vector3(sin(angle) * 0.13, 0.31, cos(angle) * 0.13), Vector3(0, angle, 0))
+			_part(head, _sphere(0.025, 0.05), Color(0.85, 0.1, 0.2), Vector3(0, 0.26, -0.14))
+		"helmet":
+			var steel := Color(0.6, 0.62, 0.66)
+			_part(head, _hemisphere(0.15), steel, Vector3(0, 0.15, 0.0))
+			_part(head, _cylinder(0.152, 0.152, 0.05), steel.darkened(0.15), Vector3(0, 0.16, 0))
+			_part(head, _box(Vector3(0.025, 0.1, 0.02)), steel, Vector3(0, 0.11, -0.14))
+		"chainmail":
+			_part(spine, _cylinder(0.205, 0.17, 0.5), Color(0.55, 0.57, 0.6), Vector3(0, 0.25, 0))
+			_part(spine, _box(Vector3(0.24, 0.42, 0.02)), shirt, Vector3(0, 0.24, -0.2))  # sobreveste
+		"cape_red", "cape_blue":
+			var cloth := Color(0.65, 0.1, 0.12) if kind == "cape_red" else Color(0.15, 0.25, 0.55)
+			var cape := _part(spine, _box(Vector3(0.46, 1.0, 0.03)), cloth, Vector3(0, 0.0, 0.17))
+			cape.rotation.x = 0.08
+		"dress":
+			_part(hips, _cylinder(0.2, 0.33, 0.85), shirt.darkened(0.1), Vector3(0, -0.4, 0))
+		"bandana":
+			_part(head, _box(Vector3(0.24, 0.09, 0.05)), Color(0.45, 0.1, 0.1), Vector3(0, 0.07, -0.11))
+		"sword":
+			_part(hand_attach, _box(Vector3(0.04, 0.04, 0.18)), Color(0.35, 0.24, 0.15), Vector3(0, 0, -0.02))
+			_part(hand_attach, _box(Vector3(0.2, 0.04, 0.04)), Color(0.45, 0.38, 0.2), Vector3(0, 0, -0.12))
+			_part(hand_attach, _box(Vector3(0.07, 0.015, 0.75)), Color(0.75, 0.77, 0.8), Vector3(0, 0, -0.5))
+		"spear":
+			_part(hand_attach, _box(Vector3(0.04, 0.04, 1.8)), Color(0.45, 0.3, 0.18), Vector3(0, 0, -0.5))
+			_part(hand_attach, _cylinder(0.0, 0.05, 0.25), Color(0.7, 0.72, 0.76), Vector3(0, 0, -1.5), Vector3(-PI / 2, 0, 0))
 
 
 # --- Animación ------------------------------------------------------------------------

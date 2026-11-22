@@ -221,7 +221,7 @@ func _set_subtitle(text: String) -> void:
 func _apply_shot(t: float, shot: Dictionary) -> void:
 	var base := Vector3.ZERO
 	var follow: Variant = shot.get("follow", null)
-	if follow is Node3D and is_instance_valid(follow):
+	if is_instance_valid(follow) and follow is Node3D:
 		base = follow.global_position
 	var from: Vector3 = shot["from"]
 	var to: Vector3 = shot.get("to", from)

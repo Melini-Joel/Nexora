@@ -7,7 +7,7 @@ signal start_pressed(player_name: String, solo: bool, slot: String, world_name: 
 signal join_pressed(player_name: String, address: String)
 
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
-const VERSION := "Prototipo v1.0"
+const VERSION := "Prototipo v1.1"
 const WARM := Color(1.0, 0.86, 0.6)
 
 var _main_box: VBoxContainer

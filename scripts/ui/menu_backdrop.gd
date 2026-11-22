@@ -19,7 +19,7 @@ func _ready() -> void:
 	_build_environment()
 	_terrain = TerrainGenerator.new()
 	add_child(_terrain)
-	_terrain.generate(world_seed)
+	_terrain.generate(world_seed, false)
 	_build_water()
 	_focus = Vector3(0, _terrain.get_height(0, 0), 0)
 	_build_camp()

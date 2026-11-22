@@ -22,7 +22,7 @@ const TYPES := {
 }
 
 var terrain: TerrainGenerator
-var _pending: Array[Vector2i] = []
+var _pending: Array[Vector2] = []  ## Esquina de cada parcela que falta generar.
 var _seed := 0
 var _density := 1.0
 var _clear_check: Callable
@@ -33,10 +33,12 @@ func setup(p_terrain: TerrainGenerator, world_seed: int, clear_check: Callable =
 	_seed = world_seed
 	_clear_check = clear_check
 	_density = {"low": 0.4, "medium": 0.75, "high": 1.0, "ultra": 1.3}.get(Settings.get_value("quality"), 0.75)
-	var count := int(TerrainGenerator.SIZE / CHUNK)
-	for cz in count:
-		for cx in count:
-			_pending.append(Vector2i(cx, cz))
+	for region in terrain.regions:
+		var corner := region.center - Vector2.ONE * region.size * 0.5
+		var count := int(region.size / CHUNK)
+		for cz in count:
+			for cx in count:
+				_pending.append(corner + Vector2(cx, cz) * CHUNK)
 
 
 func _process(_delta: float) -> void:
@@ -47,25 +49,19 @@ func _process(_delta: float) -> void:
 	var best_index := 0
 	var best_distance := INF
 	for i in _pending.size():
-		var center := _chunk_origin(_pending[i]) + Vector2.ONE * CHUNK * 0.5
+		var center := _pending[i] + Vector2.ONE * CHUNK * 0.5
 		var d := center.distance_squared_to(Vector2(focus.x, focus.z))
 		if d < best_distance:
 			best_distance = d
 			best_index = i
-	var chunk: Vector2i = _pending[best_index]
+	var chunk: Vector2 = _pending[best_index]
 	_pending.remove_at(best_index)
 	_build_chunk(chunk)
 
 
-func _chunk_origin(chunk: Vector2i) -> Vector2:
-	var half := TerrainGenerator.SIZE * 0.5
-	return Vector2(-half + chunk.x * CHUNK, -half + chunk.y * CHUNK)
-
-
-func _build_chunk(chunk: Vector2i) -> void:
+func _build_chunk(origin: Vector2) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = _seed + chunk.x * 92821 + chunk.y * 68917 + 5
-	var origin := _chunk_origin(chunk)
+	rng.seed = _seed + int(origin.x) * 2903 + int(origin.y) * 2153 + 5
 	for type: String in TYPES:
 		var info: Array = TYPES[type]
 		var transforms: Array[Transform3D] = []

@@ -166,6 +166,14 @@ func report_build(piece_id: String) -> void:
 	_report("build", piece_id, 1)
 
 
+func report_ship(stage_id: String) -> void:
+	_report("ship", stage_id, 1)
+
+
+func report_sail(destination: String) -> void:
+	_report("sail", destination, 1)
+
+
 func _report(type: String, item: String, amount: int) -> void:
 	if not multiplayer.is_server():
 		return

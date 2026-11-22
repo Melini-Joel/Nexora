@@ -63,6 +63,7 @@ var _attack_cooldown := 0.0
 var _last_attacker_peer := 0
 var _rng := RandomNumberGenerator.new()
 
+var home := Vector3.ZERO  ## Donde apareció (los bandidos no se alejan de su campamento).
 var _body: Node3D
 var _label: Label3D
 var _world: Node
@@ -73,13 +74,16 @@ func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 1
 	var size: float = _data.get("look", {}).get("size", _data.get("scale", 1.0))
+	if multiplayer.is_server():
+		home = global_position
 	if _data.get("body", "quadruped") == "humanoid":
 		var humanoid := Humanoid.new()
-		humanoid.build({
+		var is_shadow: bool = _data.get("behavior", "") == "mob"
+		humanoid.build(_data.get("look", {}) if _data.has("look") else {
 			"skin": Color(0.12, 0.1, 0.16), "hair": Color(0.05, 0.04, 0.07), "shirt": Color(0.1, 0.08, 0.14),
 			"pants": Color(0.07, 0.06, 0.1), "boots": Color(0.05, 0.05, 0.06),
 		})
-		for side in [-1, 1]:
+		for side in ([-1, 1] if is_shadow else []):
 			var eye := MeshInstance3D.new()
 			eye.mesh = Humanoid._box(Vector3(0.05, 0.03, 0.02))
 			eye.material_override = PropFactory.material(Color(1.0, 0.25, 0.15), 6.0)
@@ -238,6 +242,14 @@ func _server_think(delta: float) -> void:
 			"mob":
 				_target = _nearest_enemy_for_mob(players)
 				_aggro_time = 1.0
+			"hostile":
+				var leash := global_position.distance_to(home)
+				if leash > 38.0:
+					_target = null
+					_aggro_time = 0.0
+				elif nearest_player != null and nearest_distance < _data.get("aggro", 14.0) and not _is_dead_target(nearest_player):
+					_target = nearest_player
+					_aggro_time = 6.0
 		if _target != null and (not is_instance_valid(_target) or _aggro_time <= 0.0 or _is_dead_target(_target)):
 			_target = null
 		if _flee_time > 0.0 and _flee_from != Vector3.INF:
@@ -246,8 +258,12 @@ func _server_think(delta: float) -> void:
 			desired = away.normalized() * speed
 		elif _target != null:
 			desired = _chase_and_attack(_target, speed)
+		elif behavior == "hostile" and global_position.distance_to(home) > 14.0:
+			var back := home - global_position
+			back.y = 0.0
+			desired = back.normalized() * speed * 0.6  # Vuelve al campamento.
 		else:
-			desired = _wander(delta, speed)
+			desired = _wander(delta, speed * (0.4 if behavior == "hostile" else 1.0))
 
 	# No meterse al agua.
 	var ahead := global_position + desired.normalized() * 2.0
@@ -296,6 +312,8 @@ func _chase_and_attack(target: Node3D, speed: float) -> Vector3:
 	var to_target := target.global_position - global_position
 	to_target.y = 0
 	var size: float = _data.get("look", {}).get("size", _data.get("scale", 1.0))
+	if multiplayer.is_server():
+		home = global_position
 	var reach := 1.4 + size * 0.6
 	if to_target.length() <= reach:
 		_body.rotation.y = atan2(-to_target.x, -to_target.z)

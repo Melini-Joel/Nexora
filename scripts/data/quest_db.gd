@@ -1,6 +1,6 @@
 class_name QuestDB
 extends RefCounted
-## Misiones de la isla. El progreso es del grupo entero (cooperativo).
+## Misiones de la isla y de Valdoria. El progreso es del grupo entero (cooperativo).
 ##
 ##   giver: NPC que la da (si no tiene, se activa sola cuando se cumplen los requisitos)
 ##   requires: misiones que hay que terminar antes
@@ -18,6 +18,10 @@ extends RefCounted
 ##   kill:    derrotar criaturas (item = especie)
 ##   tame:    domesticar un animal (item = especie o "any")
 ##   build:   construir una pieza (item = id de la pieza)
+##   ship:    reparar una etapa del Albatros (item = id de la etapa, ver ShipDB)
+##   sail:    zarpar en el Albatros (item = "mainland" o "island")
+##
+##   main: true marca las misiones de la historia principal (se ven en dorado)
 
 const QUESTS := {
 	"intro": {
@@ -167,6 +171,129 @@ const QUESTS := {
 		"complete": "¡Un refugio! Tomen este plano, encontré varios en la playa.",
 		"objectives": [{"type": "build", "item": "wood_foundation", "amount": 1, "text": "Construir un cimiento de madera"}],
 		"rewards": {"bp_doorway": 1, "bp_roof": 1},
+	},
+	# --- MISIÓN PRINCIPAL: el regreso del Albatros ----------------------------------------
+	"m_albatros": {
+		"giver": "nilo", "requires": ["intro"], "main": true,
+		"title": "El regreso del Albatros",
+		"description": "Nilo cree que el Albatros se puede reparar. Vayan a ver los restos del barco en la playa del naufragio.",
+		"offer": "Fui a ver los restos del Albatros. El casco es de roble del bueno, ¿saben? Si lo reparamos, podemos irnos de esta isla. Dicen que hacia el este, más allá del horizonte, hay un reino entero: Valdoria. Vayan a ver el barco y díganme qué les parece.",
+		"progress": "Los restos están en la playa del naufragio. Búsquenlos en el mapa (M).",
+		"complete": "¿Se puede salvar? ¡Lo sabía! Escuchen: tablones de la mesa de trabajo, clavos del horno de la forja, soga de fibra y lona para las velas. Con E sobre el barco ven qué falta. Tomen, para empezar.",
+		"objectives": [{"type": "reach", "target": "wreck", "radius": 16.0, "amount": 1, "text": "Revisar los restos del Albatros"}],
+		"rewards": {"rope": 4, "nails": 10},
+	},
+	"m_hull": {
+		"requires": ["m_albatros"], "auto_complete": true, "main": true,
+		"title": "Reparar el casco",
+		"description": "Apretá E sobre el Albatros y aportá tablones (mesa de trabajo) y clavos (horno de la forja).",
+		"objectives": [{"type": "ship", "item": "hull", "amount": 1, "text": "Reparar el casco del Albatros"}],
+		"rewards": {"cooked_meat": 3},
+	},
+	"m_mast": {
+		"requires": ["m_hull"], "auto_complete": true, "main": true,
+		"title": "Levantar los mástiles",
+		"description": "Los mástiles necesitan tablones y soga (la soga se hace con fibra, desde el inventario).",
+		"objectives": [{"type": "ship", "item": "mast", "amount": 1, "text": "Levantar los mástiles"}],
+		"rewards": {"fiber": 30},
+	},
+	"m_sails": {
+		"requires": ["m_mast"], "auto_complete": true, "main": true,
+		"title": "Velas nuevas",
+		"description": "Hacen falta lonas (fibra y cuero, en la mesa de trabajo) y más soga.",
+		"objectives": [{"type": "ship", "item": "sails", "amount": 1, "text": "Colgar las velas"}],
+		"rewards": {"metal_fragments": 10},
+	},
+	"m_helm": {
+		"requires": ["m_sails"], "auto_complete": true, "main": true,
+		"title": "Timón y provisiones",
+		"description": "Arreglen el timón y carguen carne cocida para la travesía.",
+		"objectives": [{"type": "ship", "item": "helm", "amount": 1, "text": "Arreglar el timón y cargar provisiones"}],
+	},
+	"m_voyage": {
+		"requires": ["m_helm"], "auto_complete": true, "main": true,
+		"title": "Rumbo a Valdoria",
+		"description": "¡El Albatros está listo! Apretá E sobre el barco y zarpen hacia el este.",
+		"objectives": [{"type": "sail", "item": "mainland", "amount": 1, "text": "Zarpar hacia Valdoria"}],
+	},
+	# --- Valdoria -------------------------------------------------------------------------
+	"v_arrival": {
+		"requires": ["m_voyage"], "auto_complete": true, "main": true,
+		"title": "Tierra firme",
+		"description": "Llegaron a Puerto Albor. Hablen con Maese Odón, el capitán del puerto.",
+		"objectives": [{"type": "talk", "npc": "odon", "amount": 1, "text": "Hablar con Maese Odón"}],
+		"rewards": {"coin": 15},
+	},
+	"o_market": {
+		"giver": "odon", "requires": ["v_arrival"], "auto_complete": true,
+		"title": "El mercado del puerto",
+		"description": "Berta, la mercader, compra y vende de todo. Vayan a conocerla.",
+		"offer": "Si van a quedarse, van a necesitar oro. Berta, en el mercado, les compra cuero, carne y metal, y les vende de todo. Díganle que van de mi parte.",
+		"progress": "Berta tiene su puesto en la plaza, al lado del pozo.",
+		"complete": "Berta me contó que ya se conocieron. Tomen unas monedas para empezar.",
+		"objectives": [{"type": "talk", "npc": "berta", "amount": 1, "text": "Hablar con Berta"}],
+		"rewards": {"coin": 10},
+	},
+	"o_robledal": {
+		"giver": "odon", "requires": ["v_arrival"], "auto_complete": true, "main": true,
+		"title": "Camino a Robledal",
+		"description": "Sigan el camino de tierra hasta el pueblo de Robledal, al norte.",
+		"offer": "Siguiendo el camino de tierra hacia el norte está Robledal, un pueblo de granjeros. Fermín, el molinero, siempre necesita ayuda. Y paga bien... en pan.",
+		"progress": "Sigan el camino. Si se pierden, miren el mapa (M).",
+		"complete": "",
+		"objectives": [{"type": "reach", "target": "village", "radius": 22.0, "amount": 1, "text": "Llegar a Robledal"}],
+		"rewards": {"bread": 3},
+	},
+	"f_mill": {
+		"giver": "fermin", "requires": ["o_robledal"], "main": true,
+		"title": "El molino parado",
+		"description": "Las aspas del molino están rotas. Fermín necesita tablones y soga.",
+		"offer": "¿Ven el molino? Una tormenta le rompió las aspas y desde entonces no muele ni un grano. Si me traen 12 tablones y 6 sogas, lo arreglo. Sin molino no hay harina, y sin harina no hay pan.",
+		"progress": "12 tablones y 6 sogas. En el puerto hay una mesa de trabajo, al lado de la herrería.",
+		"complete": "¡Escuchen cómo gira! Robledal vuelve a tener pan. Tomen, recién horneado, y unas monedas.",
+		"objectives": [
+			{"type": "deliver", "item": "plank", "amount": 12, "text": "Entregar tablones"},
+			{"type": "deliver", "item": "rope", "amount": 6, "text": "Entregar sogas"},
+		],
+		"rewards": {"coin": 25, "bread": 4},
+	},
+	"f_harvest": {
+		"giver": "fermin", "requires": ["f_mill"],
+		"title": "La cosecha",
+		"description": "Cosechen trigo en los campos dorados de Robledal.",
+		"offer": "Con el molino andando, hay que cosechar. Junten 30 de trigo en los campos dorados. Y un secreto: con 3 de trigo, en una fogata, se hace pan.",
+		"progress": "El trigo está en los campos alrededor del pueblo. Se cosecha con click.",
+		"complete": "¡Qué cosecha! El pueblo entero les va a estar agradecido este invierno.",
+		"objectives": [{"type": "collect", "item": "wheat", "amount": 30, "text": "Cosechar trigo"}],
+		"rewards": {"coin": 20, "bread": 5},
+	},
+	"g_bandits": {
+		"giver": "galvan", "requires": ["v_arrival"], "main": true,
+		"title": "Los bandidos del sur",
+		"description": "Sir Galván necesita ayuda contra los bandidos que acampan en el bosque del sur.",
+		"offer": "¿Náufragos, eh? Entonces saben pelear por su vida. Unos bandidos acampan en el bosque del sur y asaltan las carretas que van al puerto. Mis hombres no alcanzan. Derroten a 5 y vuelvan.",
+		"progress": "El campamento está en el bosque, al sur del puerto. Lleven comida y buenas armas.",
+		"complete": "Cinco menos. Pero los bandidos tienen un jefe: Rurik. Mientras él siga libre, van a volver.",
+		"objectives": [{"type": "kill", "item": "bandit", "amount": 5, "text": "Derrotar bandidos"}],
+		"rewards": {"coin": 40},
+	},
+	"g_chief": {
+		"giver": "galvan", "requires": ["g_bandits"], "main": true,
+		"title": "Rurik el Rojo",
+		"description": "El jefe de los bandidos apareció en el campamento. Derrótenlo.",
+		"offer": "Mis espías dicen que Rurik, el jefe, volvió al campamento. Es grande y pega fuerte. Si lo derrotan, la reina en persona va a querer conocerlos.",
+		"progress": "Rurik es duro. Vayan en grupo, con pan y la mejor espada que tengan.",
+		"complete": "¡Rurik derrotado! Valdoria vuelve a respirar. Vengan: la reina los espera.",
+		"objectives": [{"type": "kill", "item": "bandit_chief", "amount": 1, "text": "Derrotar a Rurik"}],
+		"rewards": {"coin": 80},
+	},
+	"r_audience": {
+		"requires": ["g_chief"], "auto_complete": true, "main": true,
+		"title": "Audiencia real",
+		"description": "La reina Isolda quiere conocer a los héroes de Valdoria. Vayan al castillo.",
+		"objectives": [{"type": "talk", "npc": "isolda", "amount": 1, "text": "Hablar con la reina Isolda"}],
+		"rewards": {"royal_sword": 1, "coin": 100},
+		"on_complete_cinematic": "royal_audience",
 	},
 }
 

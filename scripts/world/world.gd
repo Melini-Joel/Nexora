@@ -11,6 +11,7 @@ const PIECE_SCENE := preload("res://scenes/build_piece.tscn")
 
 const PLACEMENT_ATTEMPTS := 14000  ## Puntos que se prueban para poner árboles, rocas y plantas.
 const CHEST_COUNT := 30
+const MAINLAND_CHEST_COUNT := 14
 const RESPAWN_TIME := 90.0  ## Segundos hasta que reaparece un recurso agotado.
 const CHEST_REFILL_TIME := 480.0
 const GATHER_RANGE := 6.0  ## Distancia máxima aceptada por el servidor (anti-trampas).
@@ -36,6 +37,15 @@ var terrain: TerrainGenerator
 var day_night: DayNight
 ## Lugares importantes para misiones y cinemáticas.
 var landmarks: Dictionary = {}
+var mainland: MainlandBuilder  ## Puerto, pueblo, castillo y bandidos de Valdoria.
+## El Albatros: cuántas etapas de reparación están listas (ver ShipDB), lo aportado para la
+## etapa actual y si ya hizo su primer viaje.
+var ship_stage := 0
+var ship_delivered: Dictionary = {}
+var ship_sailed := false
+var _ship_site: Interactable
+var _ship_y := 0.0
+var _pending_arrival := ""
 ## nombre (String) -> ResourceNode / LootChest
 var resource_nodes: Dictionary = {}
 var chests: Dictionary = {}
@@ -90,6 +100,10 @@ func _ready() -> void:
 	$PieceSpawner.add_spawnable_scene(PIECE_SCENE.resource_path)
 	Network.player_joined.connect(_on_player_joined)
 	Network.player_left.connect(_on_player_left)
+	QuestManager.quest_changed.connect(func() -> void:
+		if _ship_site:
+			_refresh_ship_site_text()
+	)
 
 
 func _process(delta: float) -> void:
@@ -140,6 +154,10 @@ func generate(world_seed: int) -> void:
 	terrain.generate(world_seed)
 	_build_water()
 	_place_landmarks()
+	mainland = MainlandBuilder.new()
+	mainland.name = "Mainland"
+	add_child(mainland)
+	mainland.build(self, world_seed)
 	_place_resources(world_seed)
 	_place_chests(world_seed)
 	if DisplayServer.get_name() != "headless":
@@ -155,6 +173,7 @@ func generate(world_seed: int) -> void:
 	generated_at_ms = Time.get_ticks_msec()
 	if multiplayer.is_server():
 		_spawn_initial_animals()
+		mainland.spawn_bandits()
 	Game.world_generated.emit()
 
 
@@ -232,9 +251,10 @@ func _apply_graphics() -> void:
 
 func _build_water() -> void:
 	var plane := PlaneMesh.new()
-	plane.size = Vector2.ONE * TerrainGenerator.SIZE * 6.0
-	plane.subdivide_width = 120
-	plane.subdivide_depth = 120
+	# Un solo mar para la isla y el continente.
+	plane.size = Vector2.ONE * 4600.0
+	plane.subdivide_width = 180
+	plane.subdivide_depth = 180
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/water.gdshader")
 	var ripples := FastNoiseLite.new()
@@ -253,7 +273,7 @@ func _build_water() -> void:
 	var water := MeshInstance3D.new()
 	water.name = "Water"
 	water.mesh = plane
-	water.position.y = TerrainGenerator.WATER_LEVEL
+	water.position = Vector3(TerrainGenerator.MAINLAND_CENTER.x * 0.5, TerrainGenerator.WATER_LEVEL, 0)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(water)
 
@@ -324,10 +344,15 @@ func _place_wreck(direction: Vector2) -> void:
 			p = dir * (step + 1)  # Primer punto con agua, del lado del mar.
 			var beach := dir * (step - 2)
 			var pos := _ground(beach)
-			var wreck := PropFactory.make_shipwreck()
+			var wreck := Interactable.new()
+			wreck.name = "Albatros"
+			wreck.dialog_id = "albatros"
 			wreck.position = pos
 			wreck.rotation.y = atan2(dir.x, dir.y)  # La proa mira hacia la isla.
 			add_child(wreck)
+			_ship_site = wreck
+			_ship_y = TerrainGenerator.WATER_LEVEL - 0.75 - pos.y
+			_refresh_ship_site()
 			landmarks["wreck"] = pos
 			landmarks["reef"] = Vector3(p.x + dir.x * 50, TerrainGenerator.WATER_LEVEL, p.y + dir.y * 50)
 			landmarks["ship_start"] = Vector3(p.x + dir.x * 230, TerrainGenerator.WATER_LEVEL, p.y + dir.y * 230)
@@ -408,19 +433,30 @@ func is_near_station(pos: Vector3, station: String) -> bool:
 
 
 func _place_resources(world_seed: int) -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = world_seed
 	var container := Node3D.new()
 	container.name = "Resources"
 	add_child(container)
-	var limit := TerrainGenerator.SIZE * 0.47
-	for i in PLACEMENT_ATTEMPTS:
-		var p := Vector2(rng.randf_range(-limit, limit), rng.randf_range(-limit, limit))
+	for region in terrain.regions:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = world_seed if region.id == "island" else world_seed + 777
+		var attempts := int(PLACEMENT_ATTEMPTS * pow(region.size / TerrainGenerator.SIZE, 2.0) * (1.0 if region.id == "island" else 0.75))
+		_place_region_resources(region, rng, attempts, container, "R_" if region.id == "island" else "RM_")
+
+
+func _place_region_resources(region: TerrainGenerator.Region, rng: RandomNumberGenerator, attempts: int, container: Node3D, prefix: String) -> void:
+	var limit := region.size * 0.47
+	var on_mainland := region.id == "mainland"
+	for i in attempts:
+		var p := region.center + Vector2(rng.randf_range(-limit, limit), rng.randf_range(-limit, limit))
 		var roll := rng.randf()
 		var yaw := rng.randf() * TAU
 		var h := terrain.get_height(p.x, p.y)
 		if h < TerrainGenerator.WATER_LEVEL + 0.8 or _in_clear_zone(p):
 			continue
+		if on_mainland:
+			var local := p - region.center
+			if TerrainGenerator.road_factor(local.x, local.y) > 0.0 or TerrainGenerator.in_field(local.x, local.y):
+				continue
 		var biome := terrain.get_biome(p.x, p.y)
 		var kind := ""
 		for entry in BIOME_SPAWNS[biome]:
@@ -446,7 +482,7 @@ func _place_resources(world_seed: int) -> void:
 			"cactus":
 				node = PropFactory.make_cactus(rng)
 		_mark_space(p)
-		var key := "R_%d" % i
+		var key := "%s%d" % [prefix, i]
 		node.name = key
 		node.position = Vector3(p.x, h - (0.2 if kind == "rock" else 0.08), p.y)
 		node.rotation.y = yaw
@@ -455,22 +491,28 @@ func _place_resources(world_seed: int) -> void:
 
 
 func _place_chests(world_seed: int) -> void:
+	_place_region_chests(terrain.island, world_seed + 500, CHEST_COUNT, "Chest_")
+	if terrain.mainland:
+		_place_region_chests(terrain.mainland, world_seed + 900, MAINLAND_CHEST_COUNT, "Chest_M")
+
+
+func _place_region_chests(region: TerrainGenerator.Region, chest_seed: int, amount: int, prefix: String) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = world_seed + 500
-	var limit := TerrainGenerator.SIZE * 0.45
+	rng.seed = chest_seed
+	var limit := region.size * 0.45
 	var placed := 0
 	for attempt in 600:
-		if placed >= CHEST_COUNT:
+		if placed >= amount:
 			break
-		var p := Vector2(rng.randf_range(-limit, limit), rng.randf_range(-limit, limit))
+		var p := region.center + Vector2(rng.randf_range(-limit, limit), rng.randf_range(-limit, limit))
 		var yaw := rng.randf() * TAU
 		var h := terrain.get_height(p.x, p.y)
-		if h < TerrainGenerator.WATER_LEVEL + 1.0 or p.length() < 30.0 or _in_clear_zone(p) \
+		if h < TerrainGenerator.WATER_LEVEL + 1.0 or p.length() < 30.0 or _in_clear_zone(p) or h > TerrainGenerator.SNOW_HEIGHT + 6.0 \
 				or terrain.get_slope(p.x, p.y) > 0.3 or not _space_free(p, 2.0):
 			continue
 		_mark_space(p)
 		var chest := LootChest.new()
-		chest.name = "Chest_%d" % placed
+		chest.name = "%s%d" % [prefix, placed]
 		chest.position = Vector3(p.x, h - 0.05, p.y)
 		chest.rotation.y = yaw
 		add_child(chest)
@@ -503,21 +545,25 @@ func _mark_space(p: Vector2) -> void:
 
 
 ## Lugar al azar en tierra firme dentro de ciertos biomas.
-func random_land_spot(biomes: Array, rng: RandomNumberGenerator, near: Vector3 = Vector3.INF, min_r: float = 0.0, max_r: float = 0.0) -> Vector3:
-	var limit := TerrainGenerator.SIZE * 0.46
+## region_id: "island" o "mainland" (solo cuenta si no se pasa "near").
+func random_land_spot(biomes: Array, rng: RandomNumberGenerator, near: Vector3 = Vector3.INF, min_r: float = 0.0, max_r: float = 0.0, region_id: String = "island") -> Vector3:
+	var region := terrain.region_of(region_id)
+	if region == null:
+		return Vector3.INF
+	var limit := region.size * 0.46
 	for attempt in 60:
 		var p: Vector2
 		if near != Vector3.INF:
 			var angle := rng.randf() * TAU
 			p = Vector2(near.x, near.z) + Vector2(cos(angle), sin(angle)) * rng.randf_range(min_r, max_r)
 		else:
-			p = Vector2(rng.randf_range(-limit, limit), rng.randf_range(-limit, limit))
+			p = region.center + Vector2(rng.randf_range(-limit, limit), rng.randf_range(-limit, limit))
 		var h := terrain.get_height(p.x, p.y)
 		if h < TerrainGenerator.WATER_LEVEL + 1.0 or terrain.get_slope(p.x, p.y) > 0.5:
 			continue
 		if not biomes.is_empty() and not terrain.get_biome(p.x, p.y) in biomes:
 			continue
-		if p.length() < TerrainGenerator.SPAWN_RADIUS + 6.0:
+		if p.length() < TerrainGenerator.SPAWN_RADIUS + 6.0 or (mainland and mainland.in_town(p)):
 			continue
 		return Vector3(p.x, h + 0.5, p.y)
 	return Vector3.INF
@@ -529,10 +575,28 @@ func get_players() -> Array[Node]:
 	return players_root.get_children()
 
 
-func get_spawn_point(peer_id: int) -> Vector3:
+## Punto de aparición en el campamento de la isla, o en el puerto de Valdoria.
+func get_spawn_point(peer_id: int, region_id: String = "island") -> Vector3:
 	var angle := float(peer_id % Network.MAX_PLAYERS) / Network.MAX_PLAYERS * TAU
-	var p := Vector2(cos(angle), sin(angle)) * 4.0
+	var center := Vector2.ZERO
+	if region_id == "mainland" and landmarks.has("harbor_spawn"):
+		var harbor: Vector3 = landmarks["harbor_spawn"]
+		center = Vector2(harbor.x, harbor.z)
+	var p := center + Vector2(cos(angle), sin(angle)) * 4.0
 	return Vector3(p.x, terrain.get_height(p.x, p.y) + 0.3, p.y)
+
+
+## Región de un punto; en mar abierto, la más cercana.
+func region_near(pos: Vector3) -> String:
+	var region_id := terrain.region_at(pos.x, pos.z)
+	if region_id != "":
+		return region_id
+	return "mainland" if terrain.mainland and pos.x > TerrainGenerator.MAINLAND_CENTER.x * 0.5 else "island"
+
+
+## Nombre del lugar donde está un punto ("" si no está en ningún pueblo).
+func place_name(pos: Vector3) -> String:
+	return mainland.place_name(pos) if mainland else ""
 
 
 func _on_player_joined(peer_id: int) -> void:
@@ -633,6 +697,7 @@ func build_save() -> Dictionary:
 		"blueprints": known_blueprints.duplicate(), "quests": QuestManager.export_state(),
 		"players": players, "pieces": pieces, "drops": drops, "pets": pets,
 		"depleted": _respawn_timers.duplicate(), "chests": _chest_timers.duplicate(),
+		"ship": {"stage": ship_stage, "delivered": ship_delivered.duplicate(), "sailed": ship_sailed},
 	}
 
 
@@ -640,6 +705,8 @@ func build_save() -> Dictionary:
 func load_save(data: Dictionary) -> void:
 	day_night.set_time(data.get("time", 0.3), data.get("day", 1))
 	known_blueprints = data.get("blueprints", []).duplicate()
+	var ship: Dictionary = data.get("ship", {})
+	_apply_ship(int(ship.get("stage", 0)), ship.get("delivered", {}), bool(ship.get("sailed", false)))
 	_saved_players = data.get("players", {}).duplicate(true)
 	_respawn_timers = data.get("depleted", {}).duplicate()
 	for node_name in _respawn_timers:
@@ -686,6 +753,7 @@ func get_state_for_new_player() -> Dictionary:
 	return {
 		"depleted": _respawn_timers.keys(), "chests": opened, "blueprints": known_blueprints,
 		"time": day_night.time, "day": day_night.day,
+		"ship": {"stage": ship_stage, "delivered": ship_delivered, "sailed": ship_sailed},
 	}
 
 
@@ -695,6 +763,8 @@ func apply_state(state: Dictionary) -> void:
 	for chest_name in state.get("chests", []):
 		_set_chest_state(chest_name, true)
 	known_blueprints = state.get("blueprints", [])
+	var ship: Dictionary = state.get("ship", {})
+	_apply_ship(int(ship.get("stage", 0)), ship.get("delivered", {}), bool(ship.get("sailed", false)))
 	if state.has("time"):
 		day_night.set_time(state["time"], state["day"])
 
@@ -849,7 +919,8 @@ func _respawn_point(peer_id: int) -> Vector3:
 	var bed := pieces_root.get_node_or_null(_beds.get(player_name, "-"))
 	if bed is BuildPiece:
 		return bed.global_position + bed.global_transform.basis.x * 1.2 + Vector3(0, 0.6, 0)
-	return get_spawn_point(peer_id)
+	var player := _player_node(peer_id)
+	return get_spawn_point(peer_id, region_near(player.sync_pos) if player else "island")
 
 
 # --- Cajas de almacenamiento ------------------------------------------------------------
@@ -1051,6 +1122,14 @@ func _handle_action(peer_id: int, action: String, args: Array) -> void:
 		"skill_up":
 			if args.size() == 1:
 				_server_skill_up(peer_id, str(args[0]))
+		"ship_contribute":
+			_server_ship_contribute(peer_id)
+		"sail":
+			if args.size() == 1:
+				_server_sail(peer_id, str(args[0]))
+		"trade":
+			if args.size() == 2:
+				_server_trade(peer_id, str(args[0]), int(args[1]))
 		"bed_claim":
 			if args.size() == 1:
 				var bed := pieces_root.get_node_or_null(str(args[0]))
@@ -1202,9 +1281,14 @@ func on_creature_died(creature: Creature, killer_peer: int) -> void:
 			xp_key = "kill_shade"
 		elif creature.species == "brute":
 			xp_key = "kill_brute"
+		elif SkillDB.XP.has("kill_" + creature.species):
+			xp_key = "kill_" + creature.species
 		add_xp(killer_peer, SkillDB.XP[xp_key])
-	if not CreatureDB.is_mob(creature.species):
-		_animal_respawns.append([creature.species, 120.0])
+	if CreatureDB.get_species(creature.species).has("camp"):
+		mainland.on_bandit_died(creature.species)
+	elif not CreatureDB.is_mob(creature.species):
+		var region_id := terrain.region_at(creature.global_position.x, creature.global_position.z)
+		_animal_respawns.append([creature.species, 120.0, region_id if region_id != "" else "island"])
 
 
 func _server_feed(peer_id: int, creature_name: String) -> void:
@@ -1254,6 +1338,12 @@ func _spawn_initial_animals() -> void:
 			var pos := random_land_spot(data.get("biomes", []), rng)
 			if pos != Vector3.INF:
 				_spawn_creature(species, pos)
+		# En Valdoria también hay animales (menos), salvo los del desierto.
+		if terrain.mainland and not data.get("biomes", []).has("desert"):
+			for i in int(data.get("count", 0) * 0.8):
+				var pos := random_land_spot(data.get("biomes", []), rng, Vector3.INF, 0.0, 0.0, "mainland")
+				if pos != Vector3.INF:
+					_spawn_creature(species, pos)
 
 
 func _update_animals() -> void:
@@ -1263,7 +1353,8 @@ func _update_animals() -> void:
 		entry[1] -= 1.0
 		if entry[1] <= 0.0:
 			_animal_respawns.erase(entry)
-			var pos := random_land_spot(CreatureDB.get_species(entry[0]).get("biomes", []), rng)
+			var region_id: String = entry[2] if entry.size() > 2 else "island"
+			var pos := random_land_spot(CreatureDB.get_species(entry[0]).get("biomes", []), rng, Vector3.INF, 0.0, 0.0, region_id)
 			if pos != Vector3.INF:
 				_spawn_creature(entry[0], pos)
 
@@ -1790,6 +1881,243 @@ func _intro_cinematic() -> Array:
 	]
 
 
+# --- El Albatros: reparación y viajes ---------------------------------------------------
+
+## Rearma el barco de la playa según la etapa (en todos los peers).
+func _refresh_ship_site() -> void:
+	if _ship_site == null:
+		return
+	PropFactory.fill_ship_site(_ship_site, ship_stage, _ship_y)
+	_ship_site.interact_text = "Zarpar en el Albatros" if ship_stage >= ShipDB.stage_count() else \
+		("Reparar el Albatros" if QuestManager.get_status("m_albatros") == "done" else "Revisar los restos del Albatros")
+	if mainland:
+		mainland.set_ship_visible(ship_sailed)
+
+
+func _apply_ship(stage: int, delivered: Dictionary, sailed: bool) -> void:
+	var changed := stage != ship_stage
+	ship_stage = stage
+	ship_delivered = delivered.duplicate()
+	ship_sailed = sailed
+	if changed or _ship_site == null or (mainland and mainland.ship_visible != sailed):
+		_refresh_ship_site()
+	elif _ship_site:
+		_refresh_ship_site_text()
+
+
+func _refresh_ship_site_text() -> void:
+	_ship_site.interact_text = "Zarpar en el Albatros" if ship_stage >= ShipDB.stage_count() else \
+		("Reparar el Albatros" if QuestManager.get_status("m_albatros") == "done" else "Revisar los restos del Albatros")
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_ship(stage: int, delivered: Dictionary, sailed: bool) -> void:
+	_apply_ship(stage, delivered, sailed)
+	QuestManager.quest_changed.emit()  # Refresca el panel de misiones y la ventana del barco.
+
+
+## Lo que falta de una etapa, por ejemplo "Tablón 12/40 · Clavos 0/30" ("" si no es la actual).
+func ship_progress_text(stage_id: String) -> String:
+	var stage := ShipDB.get_stage(ship_stage)
+	if stage.is_empty() or stage["id"] != stage_id:
+		return ""
+	var parts: Array[String] = []
+	var items: Dictionary = stage["items"]
+	for item: String in items:
+		parts.append("%s %d/%d" % [ItemDB.item_name(item), int(ship_delivered.get(item, 0)), int(items[item])])
+	return " · ".join(parts)
+
+
+## ¿El jugador está al lado de un barco? ("island" = el de la playa, "mainland" = el del puerto)
+func _near_ship(peer_id: int, where: String) -> bool:
+	var player := _player_node(peer_id)
+	if player == null:
+		return false
+	var key := "wreck" if where == "island" else "harbor_ship"
+	return landmarks.has(key) and (player.sync_pos as Vector3).distance_to(landmarks[key]) < 32.0
+
+
+func _server_ship_contribute(peer_id: int) -> void:
+	if ship_stage >= ShipDB.stage_count() or not _near_ship(peer_id, "island"):
+		return
+	if QuestManager.get_status("m_albatros") != "done":
+		_notify_peer(peer_id, "Nilo, el pescador, sabe de barcos. Primero hablen con él.")
+		return
+	var inventory: Inventory = _inventories[peer_id]
+	var stage := ShipDB.get_stage(ship_stage)
+	var items: Dictionary = stage["items"]
+	var given: Dictionary = {}
+	for item: String in items:
+		var missing := int(items[item]) - int(ship_delivered.get(item, 0))
+		var amount := mini(missing, inventory.count(item))
+		if amount > 0 and inventory.remove(item, amount):
+			ship_delivered[item] = int(ship_delivered.get(item, 0)) + amount
+			given[item] = amount
+	if given.is_empty():
+		_notify_peer(peer_id, "No tenés nada de lo que falta: %s" % ship_progress_text(stage["id"]))
+		return
+	_send_inventory(peer_id)
+	var player_name: String = Network.players[peer_id]["name"]
+	var complete := true
+	for item: String in items:
+		if int(ship_delivered.get(item, 0)) < int(items[item]):
+			complete = false
+	if complete:
+		ship_stage += 1
+		ship_delivered = {}
+		Network.announce.rpc("¡%s terminó de reparar: %s! (%d/%d)" % [player_name, stage["name"], ship_stage, ShipDB.stage_count()])
+		_play_ship_sound.rpc()
+		add_xp_all(SkillDB.XP["ship_stage"])
+		_sync_ship.rpc(ship_stage, ship_delivered, ship_sailed)
+		QuestManager.report_ship(stage["id"])
+		if ship_stage >= ShipDB.stage_count():
+			Network.announce.rpc("¡El Albatros está listo para zarpar! Apretá E sobre el barco.")
+	else:
+		Network.announce.rpc("%s aportó al Albatros: %s" % [player_name, ItemDB.list_text(given)])
+		_sync_ship.rpc(ship_stage, ship_delivered, ship_sailed)
+	add_xp(peer_id, SkillDB.XP["build"])
+
+
+@rpc("authority", "call_local", "reliable")
+func _play_ship_sound() -> void:
+	Sound.play("quest_complete")
+
+
+func _server_sail(peer_id: int, destination: String) -> void:
+	if ship_stage < ShipDB.stage_count() or not destination in ["mainland", "island"]:
+		return
+	if not _near_ship(peer_id, "island" if destination == "mainland" else "mainland"):
+		return
+	ship_sailed = true
+	_sync_ship.rpc(ship_stage, ship_delivered, ship_sailed)
+	var player_name: String = Network.players[peer_id]["name"]
+	Network.announce.rpc("%s hizo zarpar al Albatros rumbo a %s." % [player_name, "Valdoria" if destination == "mainland" else "la isla"])
+	QuestManager.report_sail(destination)
+	_start_voyage.rpc(destination)
+
+
+## Todos viajan juntos: cinemática del viaje y, a mitad de camino, cada uno aparece en destino.
+@rpc("authority", "call_local", "reliable")
+func _start_voyage(destination: String) -> void:
+	if Game.dialog_open:
+		Game.close_dialog()
+	if Cinematics.playing:
+		Cinematics.stop()  # Corta cualquier otra cinemática (por ejemplo la de inicio).
+	_pending_arrival = destination
+	Cinematics.play(_voyage_cinematic(destination))
+	if not Cinematics.finished.is_connected(_arrive):
+		Cinematics.finished.connect(_arrive, CONNECT_ONE_SHOT)
+
+
+## Lleva al jugador local al destino del viaje (también si saltea la cinemática).
+func _arrive() -> void:
+	if _pending_arrival == "":
+		return
+	var destination := _pending_arrival
+	_pending_arrival = ""
+	if Game.local_player:
+		Game.local_player.respawn(get_spawn_point(multiplayer.get_unique_id(), destination))
+
+
+func _voyage_cinematic(destination: String) -> Array:
+	var stage := VoyageStage.new()
+	add_child(stage)
+	var up := Vector3.UP
+	var island_ship: Vector3 = _ship_site.global_transform * Vector3(0, _ship_y, 6.0)
+	var out: Vector3 = _ship_site.global_transform.basis.z  # De la playa hacia el mar.
+	out.y = 0.0
+	out = out.normalized()
+	var out_side := Vector3(out.z, 0, -out.x)
+	var harbor_ship: Vector3 = landmarks.get("harbor_ship", Vector3(TerrainGenerator.MAINLAND_CENTER.x, 0, 0))
+	var east := Vector3(1, 0, 0)
+	var south := Vector3(0, 0, 1)
+	var sea_y := TerrainGenerator.WATER_LEVEL - 0.75
+	if destination == "mainland":
+		var harbor: Vector3 = landmarks.get("harbor", harbor_ship)
+		var leave_from := Vector3(island_ship.x, sea_y, island_ship.z)
+		var arrive_from := Vector3(harbor_ship.x - 230.0, sea_y, harbor_ship.z)
+		var arrive_to := Vector3(harbor_ship.x - 45.0, sea_y, harbor_ship.z)
+		return [
+			{"card": "Con el Albatros reparado, el grupo zarpó al amanecer, rumbo al este.", "duration": 4.5,
+				"callback": stage.sail.bind(leave_from, leave_from + out * 170.0, 17.0)},
+			{
+				"follow": stage.ship, "from": out_side * -22 + up * 8 - out * 18, "to": out_side * -14 + up * 5 + out * 4,
+				"look_from": up * 4, "look_to": up * 4 + out * 6, "duration": 7.0,
+				"text": "La isla quedó atrás. En su cima, la luz azul seguía brillando.",
+			},
+			{
+				"follow": stage.ship, "from": out * 34 + up * 14 + out_side * 6, "to": out * 26 + up * 10 + out_side * 3,
+				"look_from": up * 5 - out * 30, "duration": 5.5,
+				"text": "Nadie supo nunca qué era esa luz. Quizás algún día vuelvan a averiguarlo.",
+			},
+			{"card": "Tres días de mar abierto después...", "duration": 3.5,
+				"callback": _sail_and_arrive.bind(stage, arrive_from, arrive_to, 15.0)},
+			{
+				"follow": stage.ship, "from": south * 26 + up * 7 - east * 18, "to": south * 12 + up * 5 - east * 12,
+				"look_from": up * 4 + east * 40, "duration": 7.0,
+				"text": "...apareció la costa de un reino: Valdoria.",
+			},
+			{
+				"from": harbor + Vector3(-70, 34, 50), "to": harbor + Vector3(-40, 20, 34),
+				"look_from": harbor + up * 3, "duration": 6.5, "fade_out": true,
+				"text": "Puerto Albor. Campanas, gaviotas y olor a pan recién horneado.",
+			},
+		]
+	var back_from := Vector3(island_ship.x, sea_y, island_ship.z) + out * 220.0
+	var back_to := back_from - out * 190.0
+	return [
+		{"card": "El Albatros soltó amarras y puso rumbo a la isla.", "duration": 4.0,
+			"callback": _sail_and_arrive.bind(stage, back_from, back_to, 14.0)},
+		{
+			"follow": stage.ship, "from": out_side * -20 + up * 8 + out * 20, "to": out_side * -14 + up * 5 + out * 6,
+			"look_from": up * 4 - out * 30, "duration": 7.0, "fade_out": true,
+			"text": "La isla los esperaba, igual que siempre.",
+		},
+	]
+
+
+func _sail_and_arrive(stage: VoyageStage, from: Vector3, to: Vector3, duration: float) -> void:
+	stage.sail(from, to, duration)
+	_arrive()
+
+
+# --- Comercio (Berta, en Puerto Albor) -----------------------------------------------------
+
+func _server_trade(peer_id: int, kind: String, index: int) -> void:
+	var offers: Array = NpcDB.TRADES.get(kind, [])
+	var player := _player_node(peer_id)
+	if index < 0 or index >= offers.size() or player == null or not landmarks.has("berta_npc"):
+		return
+	if (player.sync_pos as Vector3).distance_to(landmarks["berta_npc"]) > 10.0:
+		return
+	var offer: Array = offers[index]
+	var item: String = offer[0]
+	var amount: int = offer[1]
+	var price: int = offer[2]
+	var inventory: Inventory = _inventories[peer_id]
+	if kind == "buy":
+		if not inventory.remove("coin", price):
+			_notify_peer(peer_id, "No te alcanza: cuesta %d monedas." % price)
+			return
+		_give(peer_id, item, amount)
+	else:
+		if not inventory.remove(item, amount):
+			_notify_peer(peer_id, "Te falta: %s x%d" % [ItemDB.item_name(item), amount])
+			return
+		_give(peer_id, "coin", price)
+	_send_inventory(peer_id)
+	add_xp(peer_id, SkillDB.XP["trade"])
+	if peer_id == multiplayer.get_unique_id():
+		_play_trade_sound()
+	else:
+		_play_trade_sound.rpc_id(peer_id)
+
+
+@rpc("authority", "reliable")
+func _play_trade_sound() -> void:
+	Sound.play("pickup")
+
+
 func build_cinematic(id: String) -> Array:
 	var spawn: Vector3 = landmarks["spawn"]
 	var monolith: Vector3 = landmarks["monolith"]
@@ -1804,6 +2132,23 @@ func build_cinematic(id: String) -> Array:
 					"look_from": crystal,
 					"duration": 6.0, "text": "En lo alto de la montaña, una luz antigua despierta...",
 				},
+			]
+		"royal_audience":
+			var castle: Vector3 = landmarks.get("castle", spawn)
+			var queen: Vector3 = landmarks.get("isolda_npc", castle)
+			return [
+				{
+					"from": queen + (castle - queen).normalized() * -9.0 + Vector3(0, 2.4, 0), "to": queen + (castle - queen).normalized() * -4.0 + Vector3(0, 1.9, 0),
+					"look_from": queen + Vector3(0, 1.6, 0), "duration": 6.0,
+					"text": "«Llegaron del mar sin nada, y le devolvieron la paz a mi reino.»",
+				},
+				{
+					"from": castle + Vector3(60, 45, 60), "to": castle + Vector3(90, 70, -30),
+					"look_from": castle + Vector3(0, 8, 0), "duration": 7.0,
+					"text": "«Desde hoy, Valdoria es su hogar. Y sus enemigos, nuestros enemigos.»",
+				},
+				{"card": "Los náufragos del Albatros se convirtieron en héroes de Valdoria.\n\nPero la luz azul de la isla seguía brillando... y alguien, del otro lado del mar, ya la había visto.", "duration": 8.0},
+				{"card": "Continuará...", "duration": 3.5},
 			]
 		"monolith_awakens":
 			return [

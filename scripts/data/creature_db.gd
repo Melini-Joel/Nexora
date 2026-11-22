@@ -3,7 +3,9 @@ extends RefCounted
 ## Animales y criaturas.
 ##
 ##   behavior: flee (huye), neutral (se defiende si lo atacan), wolf (neutral de día,
-##             agresivo de noche), mob (criatura nocturna: busca y ataca jugadores)
+##             agresivo de noche), mob (criatura nocturna: busca y ataca jugadores),
+##             hostile (bandidos: atacan a quien se acerque, pero no se alejan de su campamento)
+##   camp / aggro: lugar del continente donde viven y distancia a la que te ven
 ##   biomes: dónde aparecen (meadow, forest, desert, tundra)
 ##   count: cuántos hay en la isla a la vez
 ##   drops: lo que recibe quien lo mata
@@ -65,6 +67,25 @@ const SPECIES := {
 	"brute": {
 		"name": "Bruto sombrío", "body": "humanoid", "behavior": "mob", "health": 170.0, "speed": 2.8,
 		"damage": 16.0, "drops": {"metal_fragments": 10, "leather": 4}, "blueprint_chance": 0.6, "scale": 1.35,
+	},
+	# --- Bandidos de Valdoria (viven en su campamento, de día y de noche) ---
+	"bandit": {
+		"name": "Bandido", "body": "humanoid", "behavior": "hostile", "health": 90.0, "speed": 3.9,
+		"damage": 8.0, "drops": {"coin": 6, "leather": 2}, "scale": 1.0, "camp": "bandits", "aggro": 15.0,
+		"look": {
+			"skin": Color(0.78, 0.6, 0.45), "hair": Color(0.15, 0.1, 0.08),
+			"shirt": Color(0.35, 0.28, 0.2), "pants": Color(0.25, 0.22, 0.18),
+			"boots": Color(0.18, 0.13, 0.1), "accessories": ["hood", "bandana", "sword"],
+		},
+	},
+	"bandit_chief": {
+		"name": "Rurik, jefe bandido", "body": "humanoid", "behavior": "hostile", "health": 420.0, "speed": 3.6,
+		"damage": 18.0, "drops": {"coin": 60, "metal_fragments": 20}, "scale": 1.2, "camp": "bandits", "aggro": 18.0,
+		"look": {
+			"skin": Color(0.72, 0.52, 0.38), "hair": Color(0.5, 0.15, 0.08),
+			"shirt": Color(0.4, 0.08, 0.08), "pants": Color(0.2, 0.18, 0.16),
+			"boots": Color(0.15, 0.1, 0.08), "accessories": ["chainmail", "long_beard", "cape_red", "sword"],
+		},
 	},
 }
 

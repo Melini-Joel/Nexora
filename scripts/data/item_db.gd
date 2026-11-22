@@ -25,6 +25,20 @@ const ITEMS := {
 		"stack": 500, "weight": 0.4, "icon": "fragments", "color": Color(0.7, 0.74, 0.8)},
 	"leather": {"name": "Cuero", "description": "Se obtiene cazando animales. Sirve para mochilas y equipo.",
 		"stack": 200, "weight": 0.2, "icon": "leather", "color": Color(0.62, 0.43, 0.28)},
+	# --- Materiales para reparar el barco ---
+	"plank": {"name": "Tablón", "description": "Madera cepillada en la mesa de trabajo. Para el casco y la cubierta del Albatros.",
+		"stack": 200, "weight": 0.8, "icon": "plank", "color": Color(0.72, 0.52, 0.3)},
+	"rope": {"name": "Soga", "description": "Fibra trenzada. Sostiene mástiles y velas.",
+		"stack": 100, "weight": 0.3, "icon": "rope", "color": Color(0.8, 0.7, 0.45)},
+	"nails": {"name": "Clavos", "description": "Se forjan en el horno con fragmentos de metal.",
+		"stack": 500, "weight": 0.05, "icon": "nails", "color": Color(0.62, 0.64, 0.7)},
+	"sailcloth": {"name": "Lona", "description": "Tela fuerte de fibra y cuero. Con varias se hace una vela.",
+		"stack": 50, "weight": 1.0, "icon": "cloth", "color": Color(0.92, 0.88, 0.76)},
+	# --- Valdoria ---
+	"coin": {"name": "Monedas de oro", "description": "La moneda de Valdoria. Se usan para comerciar con Berta, en Puerto Albor.",
+		"stack": 9999, "weight": 0.0, "icon": "coin", "color": Color(1.0, 0.8, 0.25)},
+	"wheat": {"name": "Trigo", "description": "Se cosecha en los campos de Robledal. Con trigo se hace pan en la fogata.",
+		"stack": 200, "weight": 0.1, "icon": "wheat", "color": Color(0.9, 0.76, 0.38)},
 	# --- Comida ---
 	"berries": {"name": "Bayas", "description": "De los arbustos con frutos rojos. Calman un poco el hambre. A varios animales les encantan.",
 		"stack": 100, "weight": 0.05, "icon": "berries", "color": Color(0.82, 0.16, 0.25), "food": 8, "heal": 1},
@@ -32,6 +46,8 @@ const ITEMS := {
 		"stack": 50, "weight": 0.3, "icon": "meat", "color": Color(0.85, 0.35, 0.35), "food": 6, "heal": -4},
 	"cooked_meat": {"name": "Carne cocida", "description": "Llena mucho y recupera vida.",
 		"stack": 50, "weight": 0.3, "icon": "meat", "color": Color(0.55, 0.3, 0.15), "food": 30, "heal": 10},
+	"bread": {"name": "Pan", "description": "Pan casero de Robledal. Llena muchísimo y recupera vida.",
+		"stack": 30, "weight": 0.3, "icon": "bread", "color": Color(0.82, 0.58, 0.3), "food": 40, "heal": 15},
 	# --- Herramientas ---
 	"torch": {"name": "Antorcha", "description": "Ilumina alrededor tuyo mientras la tenés en la mano. Ideal para la noche.",
 		"stack": 5, "weight": 0.5, "icon": "torch", "color": Color(1.0, 0.6, 0.2), "damage": 8},
@@ -59,6 +75,9 @@ const ITEMS := {
 	"metal_sword": {"name": "Espada de metal", "description": "La mejor arma contra las sombras.",
 		"stack": 1, "weight": 2.5, "icon": "sword", "damage": 48, "range": 2.8, "cooldown": 0.6,
 		"color": Color(0.6, 0.72, 0.88)},
+	"royal_sword": {"name": "Espada real de Valdoria", "description": "Regalo de la reina Isolda. Forjada para los héroes del reino.",
+		"stack": 1, "weight": 2.5, "icon": "sword", "damage": 70, "range": 3.0, "cooldown": 0.55,
+		"color": Color(1.0, 0.82, 0.35)},
 	# --- Equipo ---
 	"large_backpack": {"name": "Mochila grande", "description": "Mientras la lleves en el inventario podés cargar 30 kg más.",
 		"stack": 1, "weight": 1.0, "icon": "backpack", "capacity_bonus": 30.0, "color": Color(0.55, 0.4, 0.26)},

@@ -9,6 +9,7 @@ var _options: VBoxContainer
 var _text_tween: Tween
 var _on_root := false
 var _root_text := ""
+var _screen := ""  ## "buy" / "sell" mientras se comercia.
 
 
 func _ready() -> void:
@@ -41,6 +42,7 @@ func _ready() -> void:
 	box.add_child(_options)
 
 	QuestManager.quest_changed.connect(_on_quest_changed)
+	Game.inventory_changed.connect(_on_inventory_changed)
 	Cinematics.started.connect(_close)
 	_show_root(_pick_greeting())
 
@@ -85,6 +87,7 @@ func _say(text: String) -> void:
 
 func _set_options(options: Array) -> void:
 	for child in _options.get_children():
+		_options.remove_child(child)
 		child.queue_free()
 	for i in options.size():
 		var option: Array = options[i]
@@ -104,13 +107,22 @@ func _set_options(options: Array) -> void:
 func _show_root(text: String, animate: bool = true) -> void:
 	_on_root = true
 	_root_text = text
+	_screen = ""
+	if npc_id == "albatros":
+		_show_ship(animate)
+		return
 	if animate:
 		_say(text)
 	else:
 		_text.text = text
 	var options: Array = []
 	var offered := false
-	for id in QuestManager.quests_for_npc(npc_id):
+	# La historia principal se ofrece primero.
+	var quests: Array = QuestManager.quests_for_npc(npc_id)
+	quests.sort_custom(func(a: String, b: String) -> bool:
+		return QuestDB.get_quest(a).get("main", false) and not QuestDB.get_quest(b).get("main", false)
+	)
+	for id in quests:
 		var quest := QuestDB.get_quest(id)
 		match QuestManager.get_status(id):
 			"ready":
@@ -127,6 +139,9 @@ func _show_root(text: String, animate: bool = true) -> void:
 					options.append(["¿Necesitás ayuda con algo?", _show_offer.bind(id)])
 	if options.is_empty() and QuestManager.npc_marker(npc_id) == "":
 		_text.text = "%s\n\n%s" % [text, NpcDB.get_npc(npc_id).get("idle", "")]
+	if NpcDB.get_npc(npc_id).get("trader", false):
+		options.append(["Quiero comprar", _show_trade.bind("buy", true)])
+		options.append(["Quiero vender", _show_trade.bind("sell", true)])
 	options.append(["Adiós", _close])
 	_set_options(options)
 
@@ -169,13 +184,102 @@ func _on_quest_changed() -> void:
 		_show_root(_root_text, false)
 
 
+func _on_inventory_changed() -> void:
+	if _screen in ["buy", "sell"]:
+		_show_trade(_screen, false)
+	elif _on_root and npc_id == "albatros":
+		_show_ship(false)
+
+
+# --- El Albatros: reparación y viajes --------------------------------------------------------
+
+func _show_ship(animate: bool) -> void:
+	_on_root = true
+	var world := get_tree().get_first_node_in_group("world")
+	var me: Node3D = Game.local_player
+	var on_mainland: bool = me != null and world.terrain.region_at(me.global_position.x, me.global_position.z) == "mainland"
+	var text := ""
+	var options: Array = []
+	var total := ShipDB.stage_count()
+	if on_mainland:
+		text = "El Albatros espera amarrado en el muelle de Puerto Albor, listo para volver a la isla cuando quieran."
+		options.append(["Volver a la isla (viaja todo el grupo)", _sail.bind("island")])
+	elif world.ship_stage >= total:
+		text = "¡El Albatros está reparado y listo para navegar! Velas nuevas, casco firme y la bodega llena de provisiones.\nAl zarpar viaja todo el grupo."
+		options.append(["Zarpar hacia Valdoria", _sail.bind("mainland")])
+	elif QuestManager.get_status("m_albatros") != "done":
+		text = "Los restos del Albatros. El casco está partido, pero la madera es de roble y parece sana...\nNilo, el pescador del muelle, sabe de barcos. Quizás él sepa cómo repararlo."
+	else:
+		var stage := ShipDB.get_stage(world.ship_stage)
+		var lines: Array[String] = []
+		var can_give := false
+		var items: Dictionary = stage["items"]
+		for item: String in items:
+			var delivered := int(world.ship_delivered.get(item, 0))
+			var have := Inventory.count_in(Game.inventory, item)
+			var done := delivered >= int(items[item])
+			if not done and have > 0:
+				can_give = true
+			lines.append("   %s %s: %d / %d%s" % ["✔" if done else "•", ItemDB.item_name(item), delivered, int(items[item]),
+				"" if done else "   (tenés %d)" % have])
+		text = "Reparación del Albatros  ·  Etapa %d de %d: %s\n%s\n%s" % [world.ship_stage + 1, total, stage["name"],
+			stage["description"], "\n".join(lines)]
+		if can_give:
+			options.append(["Aportar lo que tengo", _contribute])
+		else:
+			options.append(["No tengo nada de lo que falta", Callable(), true])
+	options.append(["Alejarse", _close])
+	if animate:
+		_say(text)
+	else:
+		_text.text = text
+	_set_options(options)
+
+
+func _contribute() -> void:
+	Game.send_action("ship_contribute")
+
+
+func _sail(destination: String) -> void:
+	Game.send_action("sail", [destination])
+	_close()
+
+
+# --- Comercio -------------------------------------------------------------------------------
+
+func _show_trade(kind: String, animate: bool) -> void:
+	_on_root = false
+	_screen = kind
+	var coins := Inventory.count_in(Game.inventory, "coin")
+	var text := "Tenés %d monedas de oro. %s" % [coins, "¿Qué te llevás?" if kind == "buy" else "¿Qué me traés?"]
+	if animate:
+		_say(text)
+	else:
+		_text.text = text
+	var options: Array = []
+	var offers: Array = NpcDB.TRADES[kind]
+	for i in mini(offers.size(), 8):
+		var offer: Array = offers[i]
+		var label := "%s x%d  →  %d monedas" % [ItemDB.item_name(offer[0]), offer[1], offer[2]]
+		var possible: bool = coins >= int(offer[2]) if kind == "buy" else Inventory.count_in(Game.inventory, offer[0]) >= int(offer[1])
+		if kind == "sell":
+			label = "%s x%d  →  +%d monedas" % [ItemDB.item_name(offer[0]), offer[1], offer[2]]
+		options.append([label, _trade.bind(kind, i), not possible])
+	options.append(["Volver", _show_root.bind("¿Algo más?")])
+	_set_options(options)
+
+
+func _trade(kind: String, index: int) -> void:
+	Game.send_action("trade", [kind, index])
+
+
 func _objectives_text(id: String, with_progress: bool = false) -> String:
 	var parts: Array[String] = []
 	var objectives: Array = QuestDB.get_quest(id)["objectives"]
 	for i in objectives.size():
 		var objective: Dictionary = objectives[i]
 		var text: String = objective["text"]
-		if objective.has("item"):
+		if objective.has("item") and objective["type"] in ["collect", "craft", "deliver", "kill", "tame"]:
 			text += " (%s x%d)" % [ItemDB.item_name(objective["item"]), objective["amount"]]
 		if with_progress and objective["type"] in ["collect", "craft", "deliver"]:
 			text += " %d/%d" % [QuestManager.objective_progress(id, i), objective["amount"]]

@@ -120,6 +120,34 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 ### Historia
 - **Cinemática de inicio (1 minuto):** el barco *Albatros* queda atrapado en una tormenta, choca contra los arrecifes de una isla que no figura en los mapas y los sobrevivientes despiertan en la playa. Hay lluvia, rayos, olas y sacudones de cámara. Los **restos del naufragio** quedan en la costa para explorarlos, con dos cofres. Se puede saltear con Esc.
 
+### Misión principal: el regreso del Albatros
+El objetivo del juego es **reparar el barco y salir de la isla**. La historia se sigue con la estrella ★ en el panel de misiones:
+1. **Nilo, el pescador del muelle**, cree que el Albatros se puede reparar: vayan a ver los restos en la playa del naufragio.
+2. **Reparen el barco en 4 etapas** con E sobre el Albatros. Cada jugador aporta lo que tenga en la mochila y el barco se ve cada vez más armado:
+
+   | Etapa | Hace falta |
+   |---|---|
+   | Casco | 40 tablones + 30 clavos |
+   | Mástiles | 20 tablones + 12 sogas |
+   | Velas | 6 lonas + 10 sogas |
+   | Timón y provisiones | 10 tablones + 15 clavos + 10 carnes cocidas |
+
+   - **Tablón** (x2): 5 de madera, en la mesa de trabajo.
+   - **Clavos** (x5): 2 fragmentos de metal, en el horno de la forja.
+   - **Soga**: 4 de fibra, desde el inventario.
+   - **Lona**: 12 de fibra + 2 de cuero, en la mesa de trabajo.
+3. **Zarpen hacia Valdoria.** Viaja todo el grupo junto, con una cinemática de la travesía. Desde el muelle de Puerto Albor el Albatros los puede llevar de vuelta a la isla cuando quieran.
+
+### Valdoria, el reino medieval
+Un continente de 640 × 640 m al este de la isla, con montañas nevadas en los bordes y caminos de tierra entre los pueblos:
+- **Puerto Albor:** muelle, plaza con mercado y pozo, la taberna El Ancla Rota y una herrería con mesa de trabajo, horno y fogata. Ahí están **Maese Odón** (capitán del puerto), **Berta** (mercader), **Marta** (pescadera) y **Bruno** (tabernero).
+- **Robledal:** pueblo de granjeros con casas de paja, un molino de viento y **campos de trigo** para cosechar. Ahí están **Fermín** (molinero) e **Inés** (granjera). Con 3 de trigo se hornea **pan** en una fogata.
+- **Castillo de Valdoria:** murallas con almenas, torres, portón, la torre del homenaje y el trono. Ahí están **Sir Galván** (capitán de la guardia), la **reina Isolda** y los guardias.
+- **Campamento bandido:** una empalizada en el bosque del sur con **bandidos** que atacan a quien se acerque, de día y de noche, y su jefe, **Rurik el Rojo**. Sueltan monedas.
+- **Comercio:** Berta compra cuero, carne, metal, madera, piedra, trigo y bayas, y vende pan, antorchas, soga, lona, la mochila grande, la espada de metal y planos. La moneda son las **monedas de oro**.
+- **Misiones de Valdoria:** llegar al puerto, conocer el mercado, ir a Robledal, arreglar el molino, la cosecha, derrotar a los bandidos y a Rurik, y la **audiencia con la reina**, que entrega la **Espada real de Valdoria** y cierra la historia de esta versión.
+- El mapa (M) muestra la región donde estás. Arriba de la pantalla se ve el nombre del lugar (Puerto Albor, Robledal...).
+
 ### Mundo
 - **Isla de 512 × 512 m** (4 veces más grande) con **4 biomas**: Pradera, Bosque, Desierto y Tundra nevada. Cada uno tiene sus colores, árboles, recursos y animales. Arriba de la pantalla se ve en qué bioma estás.
 - **Vegetación abundante:** 5 tipos de árbol (pino, pino nevado, roble grande, abedul, árbol redondo y árbol seco), helechos, flores de 4 colores, hongos, piedritas, troncos caídos, juncos en la orilla, arbustos y matorrales secos. Las hojas y el pasto se mueven con el viento.
@@ -203,8 +231,12 @@ scripts/
     quest_manager.gd   Misiones cooperativas (datos + lógica del servidor)
     cinematics.gd      Reproductor de cinemáticas
   world/
-    world.gd           Genera el mundo + lógica del servidor (recolección, inventarios)
-    terrain_generator.gd  Terreno low-poly procedural
+    world.gd           Genera el mundo + lógica del servidor (recolección, inventarios, barco, comercio)
+    terrain_generator.gd  Terreno procedural en dos regiones: la isla y Valdoria
+    mainland_builder.gd   Puerto, pueblo, castillo y campamento bandido de Valdoria
+    medieval_props.gd     Casas, taberna, mercado, molino, murallas, torres, carpas, trigo
+    voyage_stage.gd       Escenario de la cinemática del viaje en barco
+    interactable.gd       Objetos que se usan con E (el Albatros)
     prop_factory.gd    Modelos low-poly por código (árboles, rocas, monolito, fogata)
     resource_node.gd   Recurso recolectable
   characters/humanoid.gd  Cuerpo articulado + animaciones procedurales (jugadores y NPCs)
@@ -212,7 +244,8 @@ scripts/
     item_db.gd         Todos los ítems (nombre, peso, pila, herramienta)
     recipe_db.gd       Recetas de fabricación
     quest_db.gd        Misiones (textos, objetivos, recompensas)
-    npc_db.gd          NPCs (nombre, apariencia, saludos)
+    npc_db.gd          NPCs (nombre, apariencia, saludos) y comercio de Berta
+    ship_db.gd         Etapas de reparación del Albatros
     creature_db.gd     Animales y sombras (vida, daño, comida para domesticar)
     build_db.gd        Piezas de construcción (costo, planos necesarios)
     inventory.gd       Lógica del inventario (agregar, mover, dividir, peso)
@@ -262,4 +295,5 @@ tools/gen_audio.py     Generador de audio por síntesis
 9. ~~Cajas de almacenamiento y camas para reaparecer en tu base~~ ✅
 10. ~~Sonido y música~~ ✅
 11. ~~Cinemática de inicio: el naufragio del Albatros~~ ✅
-12. Modelos con esqueleto (Blender / Mixamo): hacen falta modelos 3D hechos por un artista. Los personajes actuales son articulados y se animan por código. Si se agregan modelos `.glb` (por ejemplo, packs gratuitos CC0), se pueden integrar manteniendo la misma interfaz de `Humanoid`.
+12. ~~Misión principal (reparar el Albatros) y el reino medieval de Valdoria~~ ✅
+13. Modelos con esqueleto (Blender / Mixamo): hacen falta modelos 3D hechos por un artista. Los personajes actuales son articulados y se animan por código. Si se agregan modelos `.glb` (por ejemplo, packs gratuitos CC0), se pueden integrar manteniendo la misma interfaz de `Humanoid`.
