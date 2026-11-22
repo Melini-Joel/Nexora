@@ -9,6 +9,9 @@ signal join_pressed(player_name: String, address: String)
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
 const VERSION := "Prototipo v1.1"
 const WARM := Color(1.0, 0.86, 0.6)
+## Tipografías del logo (licencia SIL OFL, ver fonts/).
+const TITLE_FONT := preload("res://fonts/CinzelDecorative-Bold.ttf")
+const TAGLINE_FONT := preload("res://fonts/MarcellusSC-Regular.ttf")
 
 var _main_box: VBoxContainer
 var _multi_box: VBoxContainer
@@ -52,8 +55,8 @@ func _ready() -> void:
 
 	_title = Label.new()
 	_title.text = "NEXORA"
-	_title.add_theme_font_override("font", _spaced_font(14))
-	_title.add_theme_font_size_override("font_size", 104)
+	_title.add_theme_font_override("font", _spaced_font(4, TITLE_FONT))
+	_title.add_theme_font_size_override("font_size", 100)
 	_title.add_theme_color_override("font_color", WARM)
 	_title.add_theme_color_override("font_shadow_color", Color(1.0, 0.5, 0.2, 0.45))
 	_title.add_theme_constant_override("shadow_offset_x", 0)
@@ -63,7 +66,7 @@ func _ready() -> void:
 
 	var tagline := Label.new()
 	tagline.text = "SOBREVIVÍ  ·  CONSTRUÍ  ·  DESCUBRÍ LA ISLA"
-	tagline.add_theme_font_override("font", _spaced_font(3))
+	tagline.add_theme_font_override("font", _spaced_font(3, TAGLINE_FONT))
 	tagline.add_theme_font_size_override("font_size", 15)
 	tagline.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
 	column.add_child(tagline)
@@ -362,9 +365,9 @@ func _caption(text: String) -> Label:
 	return label
 
 
-func _spaced_font(spacing: int) -> FontVariation:
+func _spaced_font(spacing: int, base: Font = null) -> FontVariation:
 	var font := FontVariation.new()
-	font.base_font = ThemeDB.fallback_font
+	font.base_font = base if base else ThemeDB.fallback_font
 	font.spacing_glyph = spacing
 	return font
 

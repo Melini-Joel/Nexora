@@ -282,6 +282,10 @@ tools/gen_audio.py     Generador de audio por síntesis
 - **Un ítem:** agregalo en `ITEMS` de `scripts/data/item_db.gd` (nombre, peso, pila) y su ícono en `item_icon.gd`.
 - **Cambiar cuánto se puede cargar:** `CAPACITY_KG` en `scripts/data/inventory.gd`.
 
+## Créditos de tipografías
+
+El logo y el título del menú usan **Cinzel Decorative** (Natanael Gama) y **Marcellus SC** (Astigmatic), las dos con licencia libre [SIL Open Font License 1.1](fonts/OFL_CinzelDecorative.txt). Están en la carpeta `fonts/`.
+
 ## Hoja de ruta
 
 1. ~~Prototipo base: mundo, jugador, cooperativo~~ ✅
