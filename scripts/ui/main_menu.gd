@@ -62,7 +62,7 @@ func _ready() -> void:
 	column.add_child(_title)
 
 	var tagline := Label.new()
-	tagline.text = "SOBREVIVAN JUNTOS  ·  CONSTRUYAN  ·  DESCUBRAN LA ISLA"
+	tagline.text = "SOBREVIVÍ  ·  CONSTRUÍ  ·  DESCUBRÍ LA ISLA"
 	tagline.add_theme_font_override("font", _spaced_font(3))
 	tagline.add_theme_font_size_override("font_size", 15)
 	tagline.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
@@ -290,7 +290,7 @@ func _build_footer() -> void:
 	left.offset_right = 600
 	left.offset_bottom = -20
 	add_child(left)
-	var right := UIStyle.label("Cooperativo de 2 a %d jugadores" % Network.MAX_PLAYERS, 13, Color(1, 1, 1, 0.45))
+	var right := UIStyle.label("Solo o cooperativo de 2 a %d jugadores" % Network.MAX_PLAYERS, 13, Color(1, 1, 1, 0.45))
 	right.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	right.offset_left = -400
 	right.offset_right = -28
