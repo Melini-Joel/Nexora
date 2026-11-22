@@ -1,3 +1,5 @@
+<p align="center"><img src="logo/nexora_logo_horizontal.png" alt="NEXORA" width="560"></p>
+
 # NEXORA
 
 RPG cooperativo de mundo abierto en 3D (2 a 6 jugadores) hecho con **Godot 4.3+** y **GDScript**.

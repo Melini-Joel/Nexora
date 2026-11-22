@@ -9,6 +9,10 @@ config/description="RPG cooperativo de mundo abierto (2 a 6 jugadores)."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.039, 0.075, 0.114, 1)
+boot_splash/image="res://logo/nexora_logo.png"
+boot_splash/fullsize=false
+boot_splash/use_filter=true
 
 [autoload]
 

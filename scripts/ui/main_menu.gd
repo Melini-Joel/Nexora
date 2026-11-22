@@ -21,6 +21,7 @@ var _name_edit: LineEdit
 var _address_edit: LineEdit
 var _status: Label
 var _title: Label
+var _emblem: TextureRect
 var _fade: ColorRect
 var _buttons: Array[Button] = []
 var _time := 0.0
@@ -34,11 +35,20 @@ func _ready() -> void:
 	column.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	column.offset_left = 110
 	column.offset_right = 560
-	column.offset_top = -300
-	column.offset_bottom = 300
+	column.offset_top = -380
+	column.offset_bottom = 380
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.add_theme_constant_override("separation", 6)
 	add_child(column)
+
+	_emblem = TextureRect.new()
+	_emblem.texture = load("res://logo/emblem.svg")
+	_emblem.custom_minimum_size = Vector2(150, 150)
+	_emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_emblem.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_emblem.pivot_offset = Vector2(75, 75)
+	column.add_child(_emblem)
 
 	_title = Label.new()
 	_title.text = "NEXORA"
@@ -105,6 +115,8 @@ func _process(delta: float) -> void:
 	_time += delta
 	# El título "respira": su brillo sube y baja suave.
 	_title.add_theme_color_override("font_shadow_color", Color(1.0, 0.5, 0.2, 0.3 + sin(_time * 1.3) * 0.15))
+	# El emblema se mece despacio, como una brújula.
+	_emblem.rotation = sin(_time * 0.6) * 0.035
 
 
 # --- Construcción -------------------------------------------------------------------
