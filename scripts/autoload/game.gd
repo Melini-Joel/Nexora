@@ -54,6 +54,8 @@ var pending_menu_message := ""
 
 func _ready() -> void:
 	_setup_input()
+	apply_touch_bindings()
+	Settings.changed.connect(apply_touch_bindings)
 
 
 # --- Inventario -----------------------------------------------------------------
@@ -229,7 +231,24 @@ func set_pause_open(is_open: bool) -> void:
 
 
 func _update_mouse() -> void:
+	if Settings.touch_enabled():
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE  # Con controles táctiles no se captura el mouse.
+		return
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if (ui_open or inventory_open or dialog_open or map_open or character_open) else Input.MOUSE_MODE_CAPTURED
+
+
+## Con controles táctiles, tocar la pantalla no tiene que golpear (los toques también llegan
+## como clicks del mouse): se quitan los botones del mouse de "golpear" y "desarmar".
+func apply_touch_bindings() -> void:
+	var touch := Settings.touch_enabled()
+	for entry in [["attack", MOUSE_BUTTON_LEFT], ["secondary", MOUSE_BUTTON_RIGHT]]:
+		var action: String = entry[0]
+		for event in InputMap.action_get_events(action):
+			if event is InputEventMouseButton:
+				InputMap.action_erase_event(action, event)
+		if not touch:
+			_add_mouse_button(action, entry[1])
+	_update_mouse()
 
 
 func reset() -> void:

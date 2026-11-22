@@ -129,6 +129,7 @@ func _ready() -> void:
 	add_child(InventoryUI.new())
 	add_child(MapUI.new())
 	add_child(CharacterUI.new())
+	add_child(TouchControls.new())  # Solo se ve en el celular (o si se activa en Opciones).
 	_last_totals = _item_totals()
 	_refresh_quest()
 	_refresh_players()
@@ -219,6 +220,10 @@ func _build_bottom() -> void:
 	help.offset_bottom = -16
 	help.modulate = Color(1, 1, 1, 0.7)
 	_root.add_child(help)
+	# En el celular la ayuda de teclado no sirve: se oculta con los controles táctiles.
+	var update_help := func() -> void: help.visible = not Settings.touch_enabled()
+	Settings.changed.connect(update_help)
+	update_help.call()
 
 
 func _build_pause_menu() -> void:

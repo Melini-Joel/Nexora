@@ -267,17 +267,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	if Game.inventory_open:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var sensitivity := Settings.mouse_sensitivity()
-		var vertical: float = event.relative.y * (-1.0 if Settings.get_value("invert_y") else 1.0)
-		_camera_pivot.rotation.y -= event.relative.x * sensitivity
-		_spring_arm.rotation.x = clampf(_spring_arm.rotation.x - vertical * sensitivity, -1.2, 0.45)
+		apply_look(event.relative, Settings.mouse_sensitivity())
 	elif event is InputEventMouseButton and event.pressed:
-		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not Settings.touch_enabled():
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			Game.select_slot(Game.selected_slot - 1)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			Game.select_slot(Game.selected_slot + 1)
+
+
+## Gira la cámara (mouse o dedo deslizándose en la pantalla).
+func apply_look(relative: Vector2, sensitivity: float) -> void:
+	var vertical: float = relative.y * (-1.0 if Settings.get_value("invert_y") else 1.0)
+	_camera_pivot.rotation.y -= relative.x * sensitivity
+	_spring_arm.rotation.x = clampf(_spring_arm.rotation.x - vertical * sensitivity, -1.2, 0.45)
 
 
 # --- Movimiento ------------------------------------------------------------------------

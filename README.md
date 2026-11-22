@@ -87,6 +87,26 @@ En Godot: **Proyecto → Exportar… → Agregar… → Windows Desktop** (la pr
 - Permití el juego en el firewall de Windows (o desactivalo un momento para probar).
 - Máximo 6 jugadores por partida.
 
+## Jugar en el celular (Android)
+
+El juego tiene **controles táctiles** que se activan solos en Android (en la PC se pueden probar con Opciones → Cámara → Controles táctiles: Siempre):
+- **Mitad izquierda de la pantalla:** joystick para moverse (aparece donde apoyás el dedo).
+- **Deslizar el dedo en el resto de la pantalla:** girar la cámara.
+- **Botones a la derecha:** Golpear (mantenelo apretado), Usar, Saltar y Correr (se prende y se apaga). Con el martillo aparecen Pieza y Desarmar.
+- **Botones a la izquierda:** menú (≡), Mochila, Mapa, Personaje y Cámara.
+- **Barra rápida:** tocá un casillero para elegirlo. En la mochila, los objetos se arrastran con el dedo.
+- En el celular el juego arranca en calidad **Baja** y usa el renderizador liviano (Compatibilidad). La sensibilidad de la cámara se ajusta en Opciones → Cámara.
+- El cooperativo funciona igual si el celular y la PC están en la misma red Wi-Fi.
+
+### Cómo generar el APK (una sola vez se prepara la PC)
+1. Instalá **Android Studio** (trae el SDK de Android) y un **JDK 17** (por ejemplo, Eclipse Temurin 17).
+2. En Godot: **Editor → Administrar plantillas de exportación → Descargar e instalar**.
+3. En Godot: **Editor → Configuración del editor → Exportar → Android**: completá la ruta del **SDK de Android** (en Windows suele ser `C:\Users\TU_USUARIO\AppData\Local\Android\Sdk`) y la del **JDK**.
+4. **Proyecto → Exportar…**: el proyecto ya trae el preset **Android**. Tocá **Exportar proyecto**, elegí la carpeta y desmarcá "Exportar en modo depuración" si querés la versión final.
+5. Pasá el archivo `NEXORA.apk` al celular (cable, Drive o WhatsApp), abrilo y permití **instalar apps de origen desconocido**.
+
+Atajo: con el celular conectado por USB y la **depuración USB** activada (Opciones de desarrollador), el ícono de Android arriba a la derecha de Godot instala y abre el juego directo en el celular.
+
 ## Controles
 
 | Tecla | Acción |

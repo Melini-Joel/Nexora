@@ -22,8 +22,11 @@ const DEFAULTS := {
 	"music_volume": 0.6,
 	"sfx_volume": 0.8,
 	"last_ip": "127.0.0.1",
+	"touch_controls": "auto",
+	"touch_sensitivity": 1.0,
 }
 const WINDOW_MODES := {"windowed": "Ventana", "maximized": "Ventana maximizada", "fullscreen": "Pantalla completa"}
+const TOUCH_MODES := {"auto": "Automático (solo en celular)", "on": "Siempre", "off": "Nunca"}
 const QUALITY_LEVELS := {"low": "Baja (más FPS)", "medium": "Media", "high": "Alta", "ultra": "Ultra (PC potente)"}
 const RESOLUTIONS := ["1024x576", "1280x720", "1366x768", "1600x900", "1920x1080", "2560x1440", "3840x2160"]
 ## Distancias de cámara que se recorren con la tecla V.
@@ -34,8 +37,30 @@ var values: Dictionary = DEFAULTS.duplicate()
 
 
 func _ready() -> void:
+	if is_mobile():
+		values["quality"] = "low"  # En el celular arranca liviano (se puede cambiar en Opciones).
 	load_settings()
 	apply_display()
+
+
+## ¿Corre en un celular o tablet (Android / iOS)?
+func is_mobile() -> bool:
+	return OS.has_feature("mobile")
+
+
+## ¿Se muestran los controles táctiles (joystick y botones en pantalla)?
+func touch_enabled() -> bool:
+	match get_value("touch_controls"):
+		"on":
+			return true
+		"off":
+			return false
+	return is_mobile()
+
+
+## Sensibilidad de la cámara al deslizar el dedo (radianes por pixel).
+func touch_sensitivity() -> float:
+	return 0.005 * float(get_value("touch_sensitivity"))
 
 
 func get_value(key: String) -> Variant:
@@ -107,8 +132,8 @@ func apply_display() -> void:
 	var root := get_tree().root
 	root.content_scale_factor = float(get_value("ui_scale"))
 	_apply_graphics(root)
-	if DisplayServer.get_name() == "headless":
-		return
+	if DisplayServer.get_name() == "headless" or is_mobile():
+		return  # En el celular la pantalla siempre es completa.
 	match get_value("window_mode"):
 		"fullscreen":
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)

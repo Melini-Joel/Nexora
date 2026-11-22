@@ -101,6 +101,12 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	# Con la mochila cerrada, tocar un casillero de la barra rápida lo elige (celular).
+	if not Game.inventory_open and event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT and source == "player" and index < Inventory.HOTBAR_SIZE:
+		Game.select_slot(index)
+		accept_event()
+		return
 	if not Game.inventory_open or not event is InputEventMouseButton or not event.pressed:
 		return
 	if event.button_index == MOUSE_BUTTON_RIGHT and source == "player":

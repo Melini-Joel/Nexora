@@ -2,3 +2,6 @@
 *.import
 export/
 *.zip
+build/
+*.apk
+*.keystore

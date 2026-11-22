@@ -99,6 +99,8 @@ func _build_camera_tab(grid: GridContainer) -> void:
 	_add_slider(grid, "Campo de visión (FOV)", "fov", 50.0, 100.0, 1.0, "%d°")
 	_add_slider(grid, "Sensibilidad del mouse", "mouse_sensitivity", 0.2, 3.0, 0.05, "%.2fx")
 	_add_check(grid, "Invertir eje vertical", "invert_y")
+	_add_option(grid, "Controles táctiles", "touch_controls", Settings.TOUCH_MODES)
+	_add_slider(grid, "Sensibilidad táctil", "touch_sensitivity", 0.3, 3.0, 0.05, "%.2fx")
 	var tip := UIStyle.label("Tip: en el juego, la tecla V cambia entre cámara cerca / normal / lejos.", 14, UIStyle.TEXT_DIM)
 	grid.add_child(tip)
 
