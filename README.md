@@ -259,7 +259,7 @@ scripts/
     interactable.gd       Objetos que se usan con E (el Albatros)
     prop_factory.gd    Modelos low-poly por código (árboles, rocas, monolito, fogata)
     resource_node.gd   Recurso recolectable
-  characters/humanoid.gd  Cuerpo articulado + animaciones procedurales (jugadores y NPCs)
+  characters/humanoid.gd  Personajes con modelo 3D (models/*.glb) + animaciones procedurales
   data/
     item_db.gd         Todos los ítems (nombre, peso, pila, herramienta)
     recipe_db.gd       Recetas de fabricación
@@ -283,6 +283,8 @@ scripts/
 shaders/               Pasto y agua
 audio/                 Sonidos y música (generados por tools/gen_audio.py)
 tools/gen_audio.py     Generador de audio por síntesis
+tools/gen_characters.py  Generador de los modelos 3D de los personajes (Blender)
+models/                Modelos 3D de los personajes (humano, sombra y bruto)
   player/player.gd     Movimiento, peso, cámara 3ª persona, herramientas, interacción
   ui/
     inventory_ui.gd    Barra rápida, ventana de inventario, indicador de carga
@@ -302,6 +304,17 @@ tools/gen_audio.py     Generador de audio por síntesis
 - **Un ítem:** agregalo en `ITEMS` de `scripts/data/item_db.gd` (nombre, peso, pila) y su ícono en `item_icon.gd`.
 - **Cambiar cuánto se puede cargar:** `CAPACITY_KG` en `scripts/data/inventory.gd`.
 
+## Modelos 3D de los personajes
+
+Los personajes usan modelos 3D con esqueleto, en estilo low-poly inspirado en Albion Online (proporciones robustas, ropa en capas y colores planos). Están en `models/`:
+- `humanoid.glb`: jugadores, habitantes, guardias y bandidos. Las partes de piel, pelo, camisa, pantalón, botas y capa se pintan con los colores de cada personaje, y los accesorios (pelo largo, rodete, barba, gorra, sombrero de paja, capucha, delantal, corona, casco, cota de malla, capa, vestido y pañuelo) se muestran según quién sea.
+- `shade.glb`: las sombras (manto en jirones, garras y ojos que brillan).
+- `brute.glb`: el bruto sombrío (cuernos, hombreras de hueso, puños enormes y grietas que brillan).
+
+Los tres comparten el mismo esqueleto: las animaciones (caminar, correr, saltar, golpear, fabricar, encorvarse con peso) se calculan por código en `scripts/characters/humanoid.gd` y mueven sus huesos.
+
+**Para cambiarlos:** se generan con `tools/gen_characters.py` (Blender como módulo de Python: `pip install bpy`, después `python tools/gen_characters.py`). También se pueden abrir en Blender y retocar a mano: mientras se mantengan los nombres de los huesos (hips, spine, head, shoulder_l, elbow_l, hand_l, hip_l, knee_l, ankle_l y sus pares _r), el juego los anima igual.
+
 ## Créditos de tipografías
 
 El logo y el título del menú usan **Cinzel Decorative** (Natanael Gama) y **Marcellus SC** (Astigmatic), las dos con licencia libre [SIL Open Font License 1.1](fonts/OFL_CinzelDecorative.txt). Están en la carpeta `fonts/`.
@@ -320,4 +333,5 @@ El logo y el título del menú usan **Cinzel Decorative** (Natanael Gama) y **Ma
 10. ~~Sonido y música~~ ✅
 11. ~~Cinemática de inicio: el naufragio del Albatros~~ ✅
 12. ~~Misión principal (reparar el Albatros) y el reino medieval de Valdoria~~ ✅
-13. Modelos con esqueleto (Blender / Mixamo): hacen falta modelos 3D hechos por un artista. Los personajes actuales son articulados y se animan por código. Si se agregan modelos `.glb` (por ejemplo, packs gratuitos CC0), se pueden integrar manteniendo la misma interfaz de `Humanoid`.
+13. ~~Modelos 3D con esqueleto para los personajes, las sombras y el bruto~~ ✅
+14. Modelos 3D para los animales (ciervo, lobo, oso...) con el mismo sistema

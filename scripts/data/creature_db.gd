@@ -63,10 +63,12 @@ const SPECIES := {
 	"shade": {
 		"name": "Sombra", "body": "humanoid", "behavior": "mob", "health": 60.0, "speed": 3.4,
 		"damage": 7.0, "drops": {"metal_fragments": 3}, "blueprint_chance": 0.3, "scale": 1.0,
+		"look": {"model": "shade"},
 	},
 	"brute": {
 		"name": "Bruto sombrío", "body": "humanoid", "behavior": "mob", "health": 170.0, "speed": 2.8,
-		"damage": 16.0, "drops": {"metal_fragments": 10, "leather": 4}, "blueprint_chance": 0.6, "scale": 1.35,
+		"damage": 16.0, "drops": {"metal_fragments": 10, "leather": 4}, "blueprint_chance": 0.6, "scale": 1.15,
+		"look": {"model": "brute"},
 	},
 	# --- Bandidos de Valdoria (viven en su campamento, de día y de noche) ---
 	"bandit": {

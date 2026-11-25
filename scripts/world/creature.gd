@@ -78,17 +78,7 @@ func _ready() -> void:
 		home = global_position
 	if _data.get("body", "quadruped") == "humanoid":
 		var humanoid := Humanoid.new()
-		var is_shadow: bool = _data.get("behavior", "") == "mob"
-		humanoid.build(_data.get("look", {}) if _data.has("look") else {
-			"skin": Color(0.12, 0.1, 0.16), "hair": Color(0.05, 0.04, 0.07), "shirt": Color(0.1, 0.08, 0.14),
-			"pants": Color(0.07, 0.06, 0.1), "boots": Color(0.05, 0.05, 0.06),
-		})
-		for side in ([-1, 1] if is_shadow else []):
-			var eye := MeshInstance3D.new()
-			eye.mesh = Humanoid._box(Vector3(0.05, 0.03, 0.02))
-			eye.material_override = PropFactory.material(Color(1.0, 0.25, 0.15), 6.0)
-			eye.position = Vector3(0.045 * side, 0.14, -0.125)
-			humanoid.head.add_child(eye)
+		humanoid.build(_data.get("look", {}))
 		humanoid.scale = Vector3.ONE * size
 		_body = humanoid
 		_add_collision(0.35 * size, 1.8 * size)

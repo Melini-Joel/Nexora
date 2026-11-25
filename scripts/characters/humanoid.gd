@@ -1,16 +1,22 @@
 class_name Humanoid
 extends Node3D
-## Personaje humanoide articulado (cadera, columna, cabeza, hombros, codos, manos,
-## caderas, rodillas y tobillos) con animaciones procedurales:
+## Personaje con modelo 3D y esqueleto (models/*.glb) y animaciones procedurales sobre sus
+## articulaciones (cadera, columna, cabeza, hombros, codos, manos, caderas, rodillas y tobillos):
 ##   quieto (respiración), caminar, correr, saltar, caer, aterrizar, golpear,
 ##   fabricar y caminar encorvado cuando la mochila pesa mucho.
 ##
 ## Las animaciones se calculan por código a partir de la velocidad y el estado, así
 ## funcionan igual para el jugador local, los compañeros por red y los NPCs.
-## Más adelante se puede reemplazar por un modelo con esqueleto (Blender / Mixamo)
-## manteniendo la misma interfaz: move_speed, grounded, vertical_speed, play_swing()...
+## Los modelos se generan con tools/gen_characters.py (Blender) y se pueden retocar en Blender
+## mientras mantengan los nombres de los huesos.
 
-const HIP_HEIGHT := 0.92
+const MODELS := {
+	"humanoid": preload("res://models/humanoid.glb"),
+	"shade": preload("res://models/shade.glb"),
+	"brute": preload("res://models/brute.glb"),
+}
+
+static var _material_cache: Dictionary = {}
 
 signal step  ## Cada vez que un pie toca el suelo (para el sonido de pasos).
 
@@ -37,6 +43,10 @@ var knee_r: Node3D
 var ankle_l: Node3D
 var ankle_r: Node3D
 var hand_attach: Node3D  ## Herramientas en la mano derecha.
+var _skeleton: Skeleton3D
+var _joints: Dictionary = {}  ## índice de hueso -> articulación (Node3D)
+var _hips_bone := -1
+var _hip_height := 0.92
 var back_attach: Node3D  ## Mochila.
 
 var _phase := 0.0
@@ -51,109 +61,107 @@ var _swing_t := -1.0  ## -1 = sin golpe; 0..1 durante el golpe.
 const SWING_DURATION := 0.45
 
 
-## Arma el cuerpo. look: {"skin", "hair", "shirt", "pants", "boots", "accessories": [...]}
+## Arma el cuerpo con un modelo 3D (models/*.glb, ver tools/gen_characters.py).
+## look: {"model", "skin", "hair", "shirt", "pants", "boots", "accessories": [...]}
+##   model: "humanoid" (por defecto), "shade" (sombra) o "brute" (bruto sombrío)
+## Las articulaciones (hips, spine, head, shoulder_l...) se arman a partir del esqueleto del
+## modelo: la animación por código las mueve y en cada cuadro se copian a los huesos.
 func build(look: Dictionary) -> void:
-	var skin: Color = look.get("skin", Color(0.9, 0.74, 0.6))
-	var hair: Color = look.get("hair", Color(0.25, 0.17, 0.1))
-	var shirt: Color = look.get("shirt", Color(0.3, 0.5, 0.8))
-	var pants: Color = look.get("pants", Color(0.25, 0.27, 0.32))
-	var boots: Color = look.get("boots", Color(0.28, 0.2, 0.14))
-	var dark := Color(0.08, 0.07, 0.07)
+	var model: String = look.get("model", "humanoid")
+	var scene: Node3D = (MODELS.get(model, MODELS["humanoid"]) as PackedScene).instantiate()
+	scene.name = "Model"
+	add_child(scene)
+	_skeleton = scene.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
 
-	hips = _pivot(self, Vector3(0, HIP_HEIGHT, 0))
-	_part(hips, _capsule(0.16, 0.4), pants, Vector3(0, 0.0, 0), Vector3(0, 0, PI / 2))
-	_part(hips, _box(Vector3(0.34, 0.05, 0.22)), boots.darkened(0.2), Vector3(0, 0.08, 0))  # cinturón
-
-	spine = _pivot(hips, Vector3(0, 0.08, 0))
-	_part(spine, _cylinder(0.19, 0.15, 0.48), shirt, Vector3(0, 0.26, 0))  # torso
-	_part(spine, _capsule(0.1, 0.5), shirt, Vector3(0, 0.46, 0), Vector3(0, 0, PI / 2))  # hombros
-	_part(spine, _cylinder(0.055, 0.065, 0.12), skin, Vector3(0, 0.57, 0))  # cuello
-
-	head = _pivot(spine, Vector3(0, 0.62, 0))
-	_part(head, _sphere(0.125, 0.29), skin, Vector3(0, 0.12, 0))
-	_part(head, _hemisphere(0.133), hair, Vector3(0, 0.15, 0.012))
-	_part(head, _box(Vector3(0.04, 0.035, 0.02)), dark, Vector3(-0.045, 0.14, -0.115))
-	_part(head, _box(Vector3(0.04, 0.035, 0.02)), dark, Vector3(0.045, 0.14, -0.115))
-	_part(head, _box(Vector3(0.03, 0.05, 0.04)), skin.darkened(0.08), Vector3(0, 0.105, -0.125))
-	_part(head, _box(Vector3(0.05, 0.012, 0.01)), skin.darkened(0.35), Vector3(0, 0.06, -0.118))
-
-	for side in [-1, 1]:
-		var shoulder := _pivot(spine, Vector3(0.245 * side, 0.47, 0))
-		_part(shoulder, _capsule(0.058, 0.33), shirt, Vector3(0, -0.14, 0))
-		var elbow := _pivot(shoulder, Vector3(0, -0.29, 0))
-		_part(elbow, _capsule(0.047, 0.3), skin, Vector3(0, -0.13, 0))
-		_part(elbow, _cylinder(0.06, 0.06, 0.06), shirt.darkened(0.1), Vector3(0, -0.01, 0))  # puño de la manga
-		var hand := _pivot(elbow, Vector3(0, -0.28, 0))
-		_part(hand, _box(Vector3(0.075, 0.1, 0.05)), skin, Vector3(0, -0.04, 0))
-		var hip := _pivot(hips, Vector3(0.1 * side, -0.02, 0))
-		_part(hip, _capsule(0.078, 0.46), pants, Vector3(0, -0.21, 0))
-		var knee := _pivot(hip, Vector3(0, -0.44, 0))
-		_part(knee, _capsule(0.062, 0.44), pants, Vector3(0, -0.2, 0))
-		var ankle := _pivot(knee, Vector3(0, -0.42, 0))
-		_part(ankle, _box(Vector3(0.11, 0.09, 0.24)), boots, Vector3(0, -0.035, -0.04))
-		_part(ankle, _cylinder(0.07, 0.07, 0.12), boots, Vector3(0, 0.04, 0))
-		if side < 0:
-			shoulder_l = shoulder
-			elbow_l = elbow
-			hip_l = hip
-			knee_l = knee
-			ankle_l = ankle
+	# Una articulación (Node3D) por hueso, en la posición de reposo del esqueleto.
+	var to_self := Transform3D.IDENTITY
+	var node: Node = _skeleton
+	while node != self:
+		to_self = (node as Node3D).transform * to_self
+		node = node.get_parent()
+	for i in _skeleton.get_bone_count():
+		var pivot := Node3D.new()
+		pivot.name = "Joint_" + _skeleton.get_bone_name(i)
+		var parent := _skeleton.get_bone_parent(i)
+		if parent < 0:
+			pivot.position = to_self * _skeleton.get_bone_rest(i).origin
+			add_child(pivot)
 		else:
-			shoulder_r = shoulder
-			elbow_r = elbow
-			hip_r = hip
-			knee_r = knee
-			ankle_r = ankle
-			hand_attach = _pivot(hand, Vector3(0, -0.06, 0))
-
+			pivot.position = _skeleton.get_bone_rest(i).origin
+			(_joints[parent] as Node3D).add_child(pivot)
+		_joints[i] = pivot
+	hips = _joint("hips")
+	spine = _joint("spine")
+	head = _joint("head")
+	shoulder_l = _joint("shoulder_l")
+	shoulder_r = _joint("shoulder_r")
+	elbow_l = _joint("elbow_l")
+	elbow_r = _joint("elbow_r")
+	hip_l = _joint("hip_l")
+	hip_r = _joint("hip_r")
+	knee_l = _joint("knee_l")
+	knee_r = _joint("knee_r")
+	ankle_l = _joint("ankle_l")
+	ankle_r = _joint("ankle_r")
+	_hips_bone = _skeleton.find_bone("hips")
+	_hip_height = hips.position.y
+	hand_attach = _pivot(_joint("hand_r"), Vector3(0, -0.06, 0))
 	back_attach = _pivot(spine, Vector3(0, 0.3, 0.16))
-	for accessory in look.get("accessories", []):
-		_add_accessory(accessory, hair, shirt)
+
+	# Colores de este personaje y accesorios visibles.
+	var accessories: Array = look.get("accessories", [])
+	var colors := {
+		"Skin": look.get("skin", Color(0.9, 0.74, 0.6)), "Hair": look.get("hair", Color(0.25, 0.17, 0.1)),
+		"Shirt": look.get("shirt", Color(0.3, 0.5, 0.8)), "Pants": look.get("pants", Color(0.25, 0.27, 0.32)),
+		"Boots": look.get("boots", Color(0.28, 0.2, 0.14)),
+		"Cape": Color(0.15, 0.25, 0.55) if accessories.has("cape_blue") else Color(0.62, 0.1, 0.12),
+	}
+	for mesh_instance in scene.find_children("*", "MeshInstance3D", true, false):
+		var mi := mesh_instance as MeshInstance3D
+		var mesh_name := String(mi.name)
+		if mesh_name.begins_with("acc_"):
+			mi.visible = _shows_accessory(mesh_name.trim_prefix("acc_"), accessories, model)
+		if model == "humanoid":
+			_recolor(mi, colors)
+	for accessory in accessories:
+		if accessory in ["sword", "spear"]:
+			_add_weapon(accessory)
+	_sync_bones()
 
 
-func _add_accessory(kind: String, hair: Color, shirt: Color) -> void:
+func _joint(bone: String) -> Node3D:
+	return _joints.get(_skeleton.find_bone(bone)) as Node3D
+
+
+static func _shows_accessory(id: String, accessories: Array, model: String) -> bool:
+	if model != "humanoid":
+		return true  # Las sombras muestran todo lo suyo (jirones...).
+	match id:
+		"hair_short":
+			return not accessories.has("hair_long") and not accessories.has("bald")
+		"cape":
+			return accessories.has("cape_red") or accessories.has("cape_blue")
+	return accessories.has(id)
+
+
+## Pinta las partes Skin, Hair, Shirt, Pants, Boots y Cape con los colores del personaje.
+static func _recolor(mi: MeshInstance3D, colors: Dictionary) -> void:
+	for i in mi.mesh.get_surface_count():
+		var material := mi.mesh.surface_get_material(i)
+		if material == null or not colors.has(material.resource_name):
+			continue
+		var color: Color = colors[material.resource_name]
+		var key := "%s_%s" % [material.resource_name, color.to_html()]
+		if not _material_cache.has(key):
+			var copy := material.duplicate() as BaseMaterial3D
+			copy.albedo_color = color
+			_material_cache[key] = copy
+		mi.set_surface_override_material(i, _material_cache[key])
+
+
+## Armas que lleva en la mano (guardias y bandidos).
+func _add_weapon(kind: String) -> void:
 	match kind:
-		"beard":
-			_part(head, _box(Vector3(0.2, 0.09, 0.08)), hair, Vector3(0, 0.05, -0.08))
-		"long_beard":
-			_part(head, _box(Vector3(0.18, 0.22, 0.07)), hair, Vector3(0, -0.01, -0.1))
-		"cap":
-			_part(head, _cylinder(0.135, 0.14, 0.08), Color(0.25, 0.35, 0.25), Vector3(0, 0.24, 0))
-			_part(head, _box(Vector3(0.2, 0.02, 0.12)), Color(0.22, 0.3, 0.22), Vector3(0, 0.21, -0.15))
-		"straw_hat":
-			_part(head, _cylinder(0.3, 0.3, 0.02), Color(0.85, 0.75, 0.45), Vector3(0, 0.22, 0))
-			_part(head, _cylinder(0.11, 0.14, 0.12), Color(0.85, 0.75, 0.45), Vector3(0, 0.28, 0))
-		"hood":
-			var hood := _part(head, _hemisphere(0.165), shirt.darkened(0.15), Vector3(0, 0.11, 0.03))
-			hood.scale = Vector3(1, 1.3, 1.1)
-		"apron":
-			_part(spine, _box(Vector3(0.3, 0.6, 0.02)), Color(0.4, 0.28, 0.17), Vector3(0, 0.12, -0.18))
-		"bun":
-			_part(head, _sphere(0.07, 0.14), hair, Vector3(0, 0.2, 0.12))
-		# --- Valdoria (medieval) ---
-		"crown":
-			var gold := Color(1.0, 0.8, 0.25)
-			_part(head, _cylinder(0.14, 0.14, 0.07), gold, Vector3(0, 0.25, 0))
-			for i in 5:
-				var angle := TAU * i / 5.0
-				_part(head, _box(Vector3(0.04, 0.07, 0.03)), gold, Vector3(sin(angle) * 0.13, 0.31, cos(angle) * 0.13), Vector3(0, angle, 0))
-			_part(head, _sphere(0.025, 0.05), Color(0.85, 0.1, 0.2), Vector3(0, 0.26, -0.14))
-		"helmet":
-			var steel := Color(0.6, 0.62, 0.66)
-			_part(head, _hemisphere(0.15), steel, Vector3(0, 0.15, 0.0))
-			_part(head, _cylinder(0.152, 0.152, 0.05), steel.darkened(0.15), Vector3(0, 0.16, 0))
-			_part(head, _box(Vector3(0.025, 0.1, 0.02)), steel, Vector3(0, 0.11, -0.14))
-		"chainmail":
-			_part(spine, _cylinder(0.205, 0.17, 0.5), Color(0.55, 0.57, 0.6), Vector3(0, 0.25, 0))
-			_part(spine, _box(Vector3(0.24, 0.42, 0.02)), shirt, Vector3(0, 0.24, -0.2))  # sobreveste
-		"cape_red", "cape_blue":
-			var cloth := Color(0.65, 0.1, 0.12) if kind == "cape_red" else Color(0.15, 0.25, 0.55)
-			var cape := _part(spine, _box(Vector3(0.46, 1.0, 0.03)), cloth, Vector3(0, 0.0, 0.17))
-			cape.rotation.x = 0.08
-		"dress":
-			_part(hips, _cylinder(0.2, 0.33, 0.85), shirt.darkened(0.1), Vector3(0, -0.4, 0))
-		"bandana":
-			_part(head, _box(Vector3(0.24, 0.09, 0.05)), Color(0.45, 0.1, 0.1), Vector3(0, 0.07, -0.11))
 		"sword":
 			_part(hand_attach, _box(Vector3(0.04, 0.04, 0.18)), Color(0.35, 0.24, 0.15), Vector3(0, 0, -0.02))
 			_part(hand_attach, _box(Vector3(0.2, 0.04, 0.04)), Color(0.45, 0.38, 0.2), Vector3(0, 0, -0.12))
@@ -161,6 +169,14 @@ func _add_accessory(kind: String, hair: Color, shirt: Color) -> void:
 		"spear":
 			_part(hand_attach, _box(Vector3(0.04, 0.04, 1.8)), Color(0.45, 0.3, 0.18), Vector3(0, 0, -0.5))
 			_part(hand_attach, _cylinder(0.0, 0.05, 0.25), Color(0.7, 0.72, 0.76), Vector3(0, 0, -1.5), Vector3(-PI / 2, 0, 0))
+
+
+## Copia las articulaciones animadas a los huesos del modelo.
+func _sync_bones() -> void:
+	for i: int in _joints:
+		_skeleton.set_bone_pose_rotation(i, (_joints[i] as Node3D).quaternion)
+	if _hips_bone >= 0:
+		_skeleton.set_bone_pose_position(_hips_bone, hips.position)
 
 
 # --- Animación ------------------------------------------------------------------------
@@ -210,7 +226,7 @@ func _process(delta: float) -> void:
 	ankle_r.rotation.x = -(hip_r.rotation.x + knee_r.rotation.x) * 0.6
 
 	# Cadera: sube y baja con los pasos, gira un poco y se agacha al aterrizar.
-	hips.position.y = HIP_HEIGHT - absf(s) * lerpf(0.025, 0.06, run) * walk * ground \
+	hips.position.y = _hip_height - absf(s) * lerpf(0.025, 0.06, run) * walk * ground \
 		- _land * 0.16 - hunch * 0.1 + breathe * 0.004 * (1.0 - walk)
 	hips.rotation.y = s * 0.12 * walk * ground
 
@@ -252,6 +268,7 @@ func _process(delta: float) -> void:
 			elbow_r.rotation.x = lerpf(elbow_r.rotation.x, 0.25 if _swing_t > 0.35 else 0.9, weight)
 			spine.rotation.y += sin(_swing_t * PI) * -0.35
 			spine.rotation.x -= (0.2 if _swing_t > 0.35 else -0.05) * weight
+	_sync_bones()
 
 
 func _swing_angle(t: float) -> float:
@@ -337,4 +354,5 @@ static func look_for_player(peer_id: int) -> Dictionary:
 		"shirt": Color.from_hsv(fmod(peer_id * 0.618034, 1.0), 0.5, 0.75),
 		"pants": pants[(h / 13) % pants.size()],
 		"boots": Color(0.3, 0.21, 0.14),
+		"accessories": [["hair_long"], [], ["beard"], [], ["hair_long", "bun"]][(h / 17) % 5],
 	}
