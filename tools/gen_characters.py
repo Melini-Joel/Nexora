@@ -1,7 +1,8 @@
 """Genera los modelos 3D de los personajes de NEXORA con Blender (bpy).
 
 Uso (con Blender instalado como módulo de Python, `pip install bpy`):
-    python tools/gen_characters.py
+    python tools/gen_characters.py                  (estilo chibi, el que usa el juego)
+    python tools/gen_characters.py --style=albion   (estilo anterior, más adulto)
 
 Crea en models/:
     humanoid.glb   jugadores, NPCs y bandidos (ropa por capas, accesorios intercambiables)
@@ -566,12 +567,283 @@ def build_brute():
     export(os.path.join(OUT_DIR, "brute.glb"), [arm, body])
 
 
+# =========================================================================================
+# Estilo CHIBI / tierno: cabeza enorme (casi un tercio del cuerpo), ojos grandes y brillantes,
+# cuerpo bajito y redondeado, manos y botas como bolitas. Mismos nombres de huesos.
+# =========================================================================================
+
+CHIBI_HEAD_Y = 1.12  # centro de la cabeza
+CHIBI_HEAD_R = 0.3
+
+CHIBI_BONES = [
+    ("hips", None, (0.0, 0.44, 0.0)),
+    ("spine", "hips", (0.0, 0.5, 0.0)),
+    ("head", "spine", (0.0, 0.84, 0.0)),
+    ("shoulder_l", "spine", (-0.2, 0.78, 0.0)),
+    ("elbow_l", "shoulder_l", (-0.23, 0.63, 0.0)),
+    ("hand_l", "elbow_l", (-0.24, 0.48, 0.0)),
+    ("shoulder_r", "spine", (0.2, 0.78, 0.0)),
+    ("elbow_r", "shoulder_r", (0.23, 0.63, 0.0)),
+    ("hand_r", "elbow_r", (0.24, 0.48, 0.0)),
+    ("hip_l", "hips", (-0.1, 0.42, 0.0)),
+    ("knee_l", "hip_l", (-0.1, 0.24, 0.0)),
+    ("ankle_l", "knee_l", (-0.1, 0.07, 0.0)),
+    ("hip_r", "hips", (0.1, 0.42, 0.0)),
+    ("knee_r", "hip_r", (0.1, 0.24, 0.0)),
+    ("ankle_r", "knee_r", (0.1, 0.07, 0.0)),
+]
+
+MATERIALS.update({
+    "White": ((0.98, 0.98, 1.0), 0.4, 0.6),
+    "Blush": ((1.0, 0.55, 0.55), 0.8, 0.0),
+    "Eye": ((0.12, 0.09, 0.1), 0.25, 0.0),
+})
+
+
+def chibi_face(b, eye_mat="Eye", blush=True, y=CHIBI_HEAD_Y, z_front=-0.29):
+    """Ojos grandes con brillo, cejitas, cachetes y boquita."""
+    H = {"head": 1}
+    for sx in (-1, 1):
+        b.blob((sx * 0.105, y - 0.03, z_front + 0.03), 0.062, eye_mat, H, segs=10, rings=7, scale=(0.75, 1.15, 0.35))
+        b.blob((sx * 0.105 - 0.02, y + 0.01, z_front + 0.008), 0.02, "White", H, segs=6, rings=4, scale=(1, 1, 0.5))
+        b.blob((sx * 0.105 + 0.018, y - 0.06, z_front + 0.012), 0.01, "White", H, segs=5, rings=3, scale=(1, 1, 0.5))
+        if blush:
+            b.blob((sx * 0.17, y - 0.11, z_front + 0.07), 0.04, "Blush", H, segs=8, rings=4, scale=(1.2, 0.55, 0.3))
+    b.blob((0, y - 0.15, z_front + 0.045), 0.022, "Dark", H, segs=6, rings=4, scale=(1.3, 0.5, 0.4))  # boca
+
+
+def chibi_body(b):
+    H = {"head": 1}
+    # Piernas cortitas y botas redondas.
+    for side, x in (("l", -0.1), ("r", 0.1)):
+        hip, knee, ankle = "hip_" + side, "knee_" + side, "ankle_" + side
+        b.tube([((x, 0.46, 0), 0.085, 0.085, {hip: 1}), ((x, 0.3, 0), 0.075, 0.075, {hip: 0.5, knee: 0.5}),
+                ((x, 0.14, 0), 0.07, 0.07, {knee: 1})], "Pants", segs=10)
+        b.blob((x, 0.1, -0.015), 0.1, "Boots", {knee: 0.4, ankle: 0.6}, segs=10, rings=6, scale=(0.95, 0.75, 1.0))
+        b.blob((x, 0.055, -0.07), 0.095, "Boots", {ankle: 1}, segs=10, rings=6, scale=(1.0, 0.6, 1.3))
+        b.box((x, 0.012, -0.06), (0.17, 0.025, 0.28), "Leather", {ankle: 1}, bevel=0.01)
+    # Cuerpito en forma de pera con túnica, cinturón y cuello.
+    b.tube([((0, 0.34, 0), 0.2, 0.16, {"hips": 1}), ((0, 0.46, 0), 0.215, 0.17, {"hips": 1}),
+            ((0, 0.62, 0), 0.2, 0.16, {"spine": 1}), ((0, 0.78, 0), 0.17, 0.14, {"spine": 1}),
+            ((0, 0.87, 0), 0.1, 0.09, {"spine": 0.5, "head": 0.5})], "Shirt", segs=14)
+    b.tube([((0, 0.5, 0), 0.222, 0.177, {"hips": 1}), ((0, 0.56, 0), 0.218, 0.174, {"hips": 0.5, "spine": 0.5})],
+           "Leather", segs=14, cap_bottom=False, cap_top=False)
+    b.blob((0, 0.53, -0.18), 0.03, "Metal", {"hips": 1}, segs=6, rings=4, scale=(1.3, 1.0, 0.5))
+    b.tube([((0, 0.8, 0), 0.15, 0.125, {"spine": 1}), ((0, 0.86, 0), 0.12, 0.1, {"spine": 1})], "Leather",
+           segs=12, cap_bottom=False, cap_top=False)
+    # Bracitos cortos y manitos redondas.
+    for side, x in (("l", -0.2), ("r", 0.2)):
+        sh, el, ha = "shoulder_" + side, "elbow_" + side, "hand_" + side
+        sx = 1 if x > 0 else -1
+        b.blob((x, 0.77, 0), 0.075, "Shirt", {sh: 0.7, "spine": 0.3}, segs=10, rings=6)
+        b.tube([((x, 0.78, 0), 0.065, 0.065, {sh: 1}), ((x + sx * 0.03, 0.63, 0), 0.058, 0.058, {sh: 0.5, el: 0.5}),
+                ((x + sx * 0.04, 0.53, 0), 0.054, 0.054, {el: 1})], "Shirt", segs=9)
+        b.blob((x + sx * 0.04, 0.47, -0.005), 0.062, "Skin", {ha: 1}, segs=9, rings=6)
+    # Cabezota redonda con orejitas y la carita.
+    b.blob((0, CHIBI_HEAD_Y, 0), CHIBI_HEAD_R, "Skin", H, segs=18, rings=12, scale=(1.05, 0.95, 1.0))
+    for sx in (-1, 1):
+        b.blob((sx * 0.31, CHIBI_HEAD_Y - 0.03, 0.01), 0.055, "Skin", H, segs=7, rings=5, scale=(0.5, 1.0, 0.8))
+    chibi_face(b)
+
+
+def chibi_accessories(materials, armature):
+    accs = []
+    H = {"head": 1}
+    hy, hr = CHIBI_HEAD_Y, CHIBI_HEAD_R
+
+    def acc(name, fn):
+        b = Builder("acc_" + name)
+        fn(b)
+        accs.append(b.build(armature, materials))
+
+    def hair_cap(b, seed):
+        b.blob((0, hy + 0.07, 0.04), hr + 0.025, "Hair", H, segs=16, rings=10, scale=(1.07, 0.88, 1.06), jitter=0.006, seed=seed)
+        for i, x in enumerate((-0.16, -0.06, 0.05, 0.15)):  # flequillo
+            b.blob((x, hy + 0.17 - abs(x) * 0.25, -0.24), 0.075, "Hair", H, segs=8, rings=5, scale=(1.0, 0.75, 0.6))
+
+    acc("hair_short", lambda b: hair_cap(b, 1))
+    acc("hair_long", lambda b: (
+        hair_cap(b, 2),
+        b.blob((0, hy - 0.16, 0.13), 0.24, "Hair", {"head": 0.7, "spine": 0.3}, segs=12, rings=8, scale=(1.15, 1.1, 0.7)),
+        [b.blob((sx * 0.29, hy - 0.12, -0.02), 0.08, "Hair", H, segs=8, rings=6, scale=(0.7, 1.6, 0.9)) for sx in (-1, 1)],
+    ))
+    acc("bun", lambda b: b.blob((0, hy + 0.3, 0.06), 0.1, "Hair", H, segs=10, rings=7))
+    acc("beard", lambda b: b.blob((0, hy - 0.2, -0.17), 0.17, "Hair", H, segs=12, rings=7, scale=(1.15, 0.65, 0.7)))
+    acc("long_beard", lambda b: (
+        b.blob((0, hy - 0.22, -0.16), 0.18, "Hair", H, segs=12, rings=7, scale=(1.1, 0.8, 0.7)),
+        b.cone((0, hy - 0.3, -0.22), (0, hy - 0.55, -0.24), 0.11, "Hair", H, segs=8, smooth=True),
+    ))
+    acc("cap", lambda b: (
+        b.blob((0, hy + 0.15, 0.02), hr + 0.03, "Pants", H, segs=14, rings=8, scale=(1.05, 0.6, 1.05)),
+        b.box((0, hy + 0.11, -0.3), (0.3, 0.025, 0.16), "Pants", H, bevel=0.01),
+    ))
+    acc("straw_hat", lambda b: (
+        b.tube([((0, hy + 0.18, 0.0), 0.5, 0.5, H), ((0, hy + 0.2, 0.0), 0.5, 0.5, H)], "Straw", segs=18),
+        b.blob((0, hy + 0.24, 0.0), 0.24, "Straw", H, segs=14, rings=8, scale=(1.0, 0.6, 1.0)),
+        b.tube([((0, hy + 0.2, 0.0), 0.245, 0.245, H), ((0, hy + 0.25, 0.0), 0.245, 0.245, H)], "Apron", segs=14,
+               cap_bottom=False, cap_top=False),
+    ))
+    acc("hood", lambda b: (
+        # Corrida hacia atrás: envuelve la cabeza pero deja la cara a la vista.
+        b.blob((0, hy + 0.05, 0.13), hr + 0.05, "Shirt", H, segs=16, rings=10, scale=(1.1, 1.06, 0.95)),
+        b.tube([((0, hy - 0.2, 0.12), 0.25, 0.2, H), ((0, hy - 0.3, 0.1), 0.2, 0.17, {"head": 0.5, "spine": 0.5})],
+               "Shirt", segs=14, cap_bottom=False, cap_top=False),
+        b.cone((0, hy + 0.24, 0.26), (0, hy + 0.08, 0.52), 0.1, "Shirt", H, segs=8, smooth=True),
+    ))
+    acc("apron", lambda b: b.box((0, 0.46, -0.19), (0.26, 0.3, 0.02), "Apron", {"hips": 1}, bevel=0.01))
+    acc("crown", lambda b: [
+        b.tube([((0, hy + 0.24, 0.0), 0.17, 0.17, H), ((0, hy + 0.31, 0.0), 0.18, 0.18, H)], "Gold", segs=12,
+               cap_bottom=False, cap_top=False)]
+        + [b.cone((math.sin(a) * 0.175, hy + 0.3, math.cos(a) * 0.175), (math.sin(a) * 0.175, hy + 0.4, math.cos(a) * 0.175),
+                  0.035, "Gold", H, segs=4) for a in [i * 2 * math.pi / 6 for i in range(6)]]
+        + [b.blob((math.sin(a) * 0.175, hy + 0.41, math.cos(a) * 0.175), 0.02, "Gold", H, segs=5, rings=3)
+           for a in [i * 2 * math.pi / 6 for i in range(6)]]
+        + [b.blob((0, hy + 0.27, -0.18), 0.03, "Gem", H, segs=6, rings=4)])
+    acc("helmet", lambda b: (
+        b.blob((0, hy + 0.06, 0.0), hr + 0.04, "Metal", H, segs=16, rings=10, scale=(1.06, 0.9, 1.05)),
+        b.tube([((0, hy + 0.0, 0.0), hr + 0.045, hr + 0.05, H), ((0, hy + 0.05, 0.0), hr + 0.045, hr + 0.05, H)], "Metal", segs=16),
+        b.cone((0, hy + 0.3, 0.0), (0, hy + 0.45, 0.04), 0.04, "Gold", H, segs=6),
+    ))
+    acc("chainmail", lambda b: (
+        b.tube([((0, 0.32, 0), 0.21, 0.17, {"hips": 1}), ((0, 0.46, 0), 0.225, 0.18, {"hips": 1}),
+                ((0, 0.62, 0), 0.21, 0.17, {"spine": 1}), ((0, 0.79, 0), 0.18, 0.15, {"spine": 1})],
+               "Metal", segs=14, cap_bottom=False, cap_top=False),
+        b.box((0, 0.6, -0.19), (0.22, 0.34, 0.02), "Shirt", {"spine": 0.5, "hips": 0.5}, bevel=0.01),
+        [b.blob((sx * 0.2, 0.8, 0), 0.085, "Metal", {"shoulder_" + side: 1}, segs=10, rings=6, scale=(1.1, 0.7, 1.0))
+         for sx, side in ((-1, "l"), (1, "r"))],
+    ))
+    acc("cape", lambda b: (
+        b.box((0, 0.5, 0.17), (0.42, 0.62, 0.03), "Cape", {"spine": 1}, taper=0.7),
+        b.tube([((0, 0.8, 0), 0.16, 0.135, {"spine": 1}), ((0, 0.84, 0), 0.13, 0.11, {"spine": 1})], "Cape", segs=12,
+               cap_bottom=False, cap_top=False),
+    ))
+    acc("dress", lambda b: b.tube([
+        ((0, 0.6, 0), 0.2, 0.165, {"hips": 1}), ((0, 0.34, 0), 0.27, 0.23, {"hips": 1}),
+        ((0, 0.05, 0), 0.33, 0.29, {"hips": 1}),
+    ], "Shirt", segs=16, cap_top=False))
+    acc("bandana", lambda b: (
+        # Pañuelo atado sobre la nariz: tapa la boca y deja ver los ojos.
+        b.blob((0, hy - 0.12, -0.015), hr * 0.98, "Bandana", H, segs=16, rings=10, scale=(1.06, 0.3, 1.02)),
+        b.cone((0, hy - 0.16, 0.27), (0.05, hy - 0.26, 0.36), 0.05, "Bandana", H, segs=5),
+    ))
+    return accs
+
+
+def build_humanoid_chibi():
+    reset_scene()
+    materials = make_materials()
+    arm = make_armature(CHIBI_BONES)
+    b = Builder("Body")
+    chibi_body(b)
+    body = b.build(arm, materials)
+    accs = chibi_accessories(materials, arm)
+    export(os.path.join(OUT_DIR, "humanoid.glb"), [arm, body] + accs)
+
+
+def build_shade_chibi():
+    """Fantasmita encapuchado: capucha enorme, ojos que brillan, manto ondulado y garritas."""
+    reset_scene()
+    materials = make_materials()
+    arm = make_armature(CHIBI_BONES)
+    b = Builder("Body")
+    rng = random.Random(11)
+    hy = CHIBI_HEAD_Y
+    for side, x in (("l", -0.09), ("r", 0.09)):
+        b.tube([((x, 0.42, 0), 0.05, 0.05, {"hip_" + side: 1}), ((x, 0.08, 0), 0.04, 0.04, {"ankle_" + side: 1})], "Shadow", segs=7)
+    segs = 18
+    loops = b.tube([((0, 0.86, 0.0), 0.16, 0.14, {"spine": 1}), ((0, 0.6, 0.0), 0.24, 0.21, {"spine": 0.6, "hips": 0.4}),
+                    ((0, 0.3, 0.0), 0.3, 0.27, {"hips": 1}), ((0, 0.12, 0.0), 0.33, 0.3, {"hips": 1})],
+                   "ShadowCloth", segs=segs, cap_bottom=False, cap_top=False)
+    for k, v in enumerate(loops[-1]):
+        v.co.z += 0.09 * math.sin(k * 2 * math.pi / segs * 4) + rng.uniform(-0.02, 0.02)  # borde ondulado
+    b.blob((0, hy - 0.02, 0.03), CHIBI_HEAD_R + 0.05, "ShadowCloth", {"head": 1}, segs=16, rings=10, scale=(1.05, 1.0, 1.0))
+    b.cone((0, hy + 0.22, 0.18), (0.05, hy + 0.12, 0.5), 0.12, "ShadowCloth", {"head": 1}, segs=8, smooth=True)
+    b.blob((0, hy - 0.04, -0.17), 0.24, "Dark", {"head": 1}, segs=14, rings=8, scale=(1.0, 0.95, 0.6))
+    for sx in (-1, 1):
+        b.blob((sx * 0.095, hy - 0.02, -0.3), 0.06, "Glow", {"head": 1}, segs=10, rings=6, scale=(0.85, 1.1, 0.4))
+    for side, x in (("l", -0.2), ("r", 0.2)):
+        sh, el, ha = "shoulder_" + side, "elbow_" + side, "hand_" + side
+        sx = 1 if x > 0 else -1
+        b.tube([((x, 0.78, 0), 0.07, 0.07, {sh: 1}), ((x + sx * 0.04, 0.55, 0), 0.085, 0.085, {el: 1})], "ShadowCloth", segs=8)
+        b.blob((x + sx * 0.04, 0.48, 0), 0.05, "Shadow", {ha: 1}, segs=8, rings=5)
+        for i in range(3):
+            off = (i - 1) * 0.025
+            b.cone((x + sx * 0.04 + off, 0.45, -0.02), (x + sx * 0.04 + off * 1.5, 0.37, -0.06), 0.012, "Shadow", {ha: 1}, segs=4)
+    body = b.build(arm, materials)
+    wisps = Builder("acc_wisps")
+    for i in range(4):
+        a = rng.uniform(0, 2 * math.pi)
+        p = (math.cos(a) * 0.3, rng.uniform(0.3, 0.9), 0.08 + math.sin(a) * 0.22)
+        wisps.blob(p, 0.04, "ShadowCloth", {"spine": 1}, segs=6, rings=4, scale=(1, 1.6, 1))
+    w = wisps.build(arm, materials)
+    export(os.path.join(OUT_DIR, "shade.glb"), [arm, body, w])
+
+
+CHIBI_BRUTE_BONES = [
+    ("hips", None, (0.0, 0.5, 0.0)),
+    ("spine", "hips", (0.0, 0.58, 0.0)),
+    ("head", "spine", (0.0, 1.12, -0.05)),
+    ("shoulder_l", "spine", (-0.42, 0.98, 0.0)),
+    ("elbow_l", "shoulder_l", (-0.5, 0.74, 0.0)),
+    ("hand_l", "elbow_l", (-0.54, 0.52, 0.0)),
+    ("shoulder_r", "spine", (0.42, 0.98, 0.0)),
+    ("elbow_r", "shoulder_r", (0.5, 0.74, 0.0)),
+    ("hand_r", "elbow_r", (0.54, 0.52, 0.0)),
+    ("hip_l", "hips", (-0.17, 0.46, 0.0)),
+    ("knee_l", "hip_l", (-0.18, 0.26, 0.0)),
+    ("ankle_l", "knee_l", (-0.18, 0.08, 0.0)),
+    ("hip_r", "hips", (0.17, 0.46, 0.0)),
+    ("knee_r", "hip_r", (0.18, 0.26, 0.0)),
+    ("ankle_r", "knee_r", (0.18, 0.08, 0.0)),
+]
+
+
+def build_brute_chibi():
+    """Bruto redondote: panza enorme con grietas que brillan, cuernitos y puños gigantes."""
+    reset_scene()
+    materials = make_materials()
+    arm = make_armature(CHIBI_BRUTE_BONES)
+    b = Builder("Body")
+    for side, x in (("l", -0.18), ("r", 0.18)):
+        hp, kn, an = "hip_" + side, "knee_" + side, "ankle_" + side
+        b.tube([((x, 0.5, 0), 0.13, 0.13, {hp: 1}), ((x, 0.2, 0), 0.12, 0.12, {kn: 1})], "Shadow", segs=10)
+        b.blob((x, 0.08, -0.05), 0.15, "Shadow", {an: 1}, segs=10, rings=6, scale=(1.0, 0.6, 1.25))
+        for i in range(3):
+            b.cone((x + (i - 1) * 0.07, 0.06, -0.2), (x + (i - 1) * 0.08, 0.03, -0.28), 0.03, "Bone", {an: 1}, segs=4)
+    b.blob((0, 0.78, 0), 0.45, "Shadow", {"spine": 0.7, "hips": 0.3}, segs=16, rings=10, scale=(1.0, 0.95, 0.85))
+    for x, y, r in ((-0.08, 0.8, 0.3), (0.1, 0.68, -0.4), (0.02, 0.92, 0.1)):
+        b.box((x, y, -0.375), (0.035, 0.2, 0.03), "Glow", {"spine": 1}, rot_y=0.0)
+    for side, x in (("l", -0.42), ("r", 0.42)):
+        sh, el, ha = "shoulder_" + side, "elbow_" + side, "hand_" + side
+        sx = 1 if x > 0 else -1
+        b.blob((x, 1.0, 0), 0.16, "Bone", {sh: 0.6, "spine": 0.4}, segs=10, rings=6, scale=(1.1, 0.75, 1.0), jitter=0.015, seed=9)
+        for i in range(2):
+            base = (x + sx * 0.04 * i, 1.1, -0.04 + 0.08 * i)
+            b.cone(base, (base[0] + sx * 0.08, base[1] + 0.16, base[2]), 0.04, "Bone", {sh: 1}, segs=5)
+        b.tube([((x, 0.98, 0), 0.11, 0.11, {sh: 1}), ((x + sx * 0.08, 0.74, 0), 0.12, 0.12, {el: 1}),
+                ((x + sx * 0.12, 0.6, 0), 0.13, 0.13, {el: 0.5, ha: 0.5})], "Shadow", segs=10)
+        b.blob((x + sx * 0.12, 0.48, -0.02), 0.17, "Shadow", {ha: 1}, segs=12, rings=7)
+        for i in range(3):
+            b.cone((x + sx * 0.12 + (i - 1) * 0.07, 0.4, -0.14), (x + sx * 0.12 + (i - 1) * 0.08, 0.32, -0.22), 0.028,
+                   "Bone", {ha: 1}, segs=4)
+    hy = 1.27
+    b.blob((0, hy, -0.08), 0.24, "Shadow", {"head": 1}, segs=14, rings=9, scale=(1.1, 0.9, 1.0))
+    for sx in (-1, 1):
+        b.cone((sx * 0.14, hy + 0.14, -0.06), (sx * 0.3, hy + 0.33, 0.0), 0.06, "Bone", {"head": 1}, segs=7, smooth=True)
+        b.blob((sx * 0.085, hy + 0.0, -0.29), 0.05, "Glow", {"head": 1}, segs=8, rings=5, scale=(1.0, 0.8, 0.4))
+        b.cone((sx * 0.07, hy - 0.14, -0.29), (sx * 0.065, hy - 0.06, -0.3), 0.022, "Bone", {"head": 1}, segs=4)
+    body = b.build(arm, materials)
+    export(os.path.join(OUT_DIR, "brute.glb"), [arm, body])
+
+
 if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
-    which = sys.argv[1:] or ["humanoid", "shade", "brute"]
-    if "humanoid" in which:
-        build_humanoid()
-    if "shade" in which:
-        build_shade()
-    if "brute" in which:
-        build_brute()
+    args = sys.argv[1:]
+    style = "albion" if "--style=albion" in args else "chibi"
+    which = [a for a in args if not a.startswith("--")] or ["humanoid", "shade", "brute"]
+    builders = {
+        "chibi": {"humanoid": build_humanoid_chibi, "shade": build_shade_chibi, "brute": build_brute_chibi},
+        "albion": {"humanoid": build_humanoid, "shade": build_shade, "brute": build_brute},
+    }[style]
+    for name in which:
+        builders[name]()

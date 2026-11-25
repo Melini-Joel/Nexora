@@ -95,7 +95,7 @@ func _ready() -> void:
 	_label.font_size = 34
 	_label.outline_size = 10
 	_label.pixel_size = 0.005
-	_label.position.y = (2.3 if _data.get("body", "") == "humanoid" else 1.4) * size + 0.3
+	_label.position.y = (1.6 if _data.get("body", "") == "humanoid" else 1.4) * size + 0.3
 	add_child(_label)
 	_update_label()
 

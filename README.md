@@ -306,14 +306,14 @@ models/                Modelos 3D de los personajes (humano, sombra y bruto)
 
 ## Modelos 3D de los personajes
 
-Los personajes usan modelos 3D con esqueleto, en estilo low-poly inspirado en Albion Online (proporciones robustas, ropa en capas y colores planos). Están en `models/`:
+Los personajes usan modelos 3D con esqueleto en estilo **chibi**: cabeza grande, ojos grandes con brillo, cachetes, cuerpo bajito y redondeado, y manos y botas como bolitas. Están en `models/`:
 - `humanoid.glb`: jugadores, habitantes, guardias y bandidos. Las partes de piel, pelo, camisa, pantalón, botas y capa se pintan con los colores de cada personaje, y los accesorios (pelo largo, rodete, barba, gorra, sombrero de paja, capucha, delantal, corona, casco, cota de malla, capa, vestido y pañuelo) se muestran según quién sea.
-- `shade.glb`: las sombras (manto en jirones, garras y ojos que brillan).
-- `brute.glb`: el bruto sombrío (cuernos, hombreras de hueso, puños enormes y grietas que brillan).
+- `shade.glb`: las sombras, como fantasmitas encapuchados con ojos que brillan, manto ondulado y garritas.
+- `brute.glb`: el bruto sombrío, redondote, con cuernitos, hombreras de hueso, puños gigantes y grietas que brillan en la panza.
 
 Los tres comparten el mismo esqueleto: las animaciones (caminar, correr, saltar, golpear, fabricar, encorvarse con peso) se calculan por código en `scripts/characters/humanoid.gd` y mueven sus huesos.
 
-**Para cambiarlos:** se generan con `tools/gen_characters.py` (Blender como módulo de Python: `pip install bpy`, después `python tools/gen_characters.py`). También se pueden abrir en Blender y retocar a mano: mientras se mantengan los nombres de los huesos (hips, spine, head, shoulder_l, elbow_l, hand_l, hip_l, knee_l, ankle_l y sus pares _r), el juego los anima igual.
+**Para cambiarlos:** se generan con `tools/gen_characters.py` (Blender como módulo de Python: `pip install bpy`, después `python tools/gen_characters.py`). El generador también guarda el estilo anterior, más adulto e inspirado en Albion Online: `python tools/gen_characters.py --style=albion`. También se pueden abrir en Blender y retocar a mano: mientras se mantengan los nombres de los huesos (hips, spine, head, shoulder_l, elbow_l, hand_l, hip_l, knee_l, ankle_l y sus pares _r), el juego los anima igual.
 
 ## Créditos de tipografías
 

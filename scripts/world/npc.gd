@@ -33,7 +33,7 @@ func _ready() -> void:
 
 	var label := Label3D.new()
 	label.text = "%s\n%s" % [data.get("name", npc_id), data.get("title", "")]
-	label.position = Vector3(0, 2.15, 0)
+	label.position = Vector3(0, 1.78, 0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.font_size = 36
 	label.outline_size = 10
@@ -42,7 +42,7 @@ func _ready() -> void:
 	add_child(label)
 
 	_marker = Label3D.new()
-	_marker.position = Vector3(0, 2.65, 0)
+	_marker.position = Vector3(0, 2.28, 0)
 	_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_marker.font_size = 110
 	_marker.outline_size = 18
@@ -65,7 +65,7 @@ func _refresh_marker() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	_marker.position.y = 2.65 + sin(_time * 3.0) * 0.08
+	_marker.position.y = 2.28 + sin(_time * 3.0) * 0.08
 	# Mira al jugador más cercano.
 	var target := _nearest_player()
 	if target != Vector3.INF:

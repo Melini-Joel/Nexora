@@ -106,7 +106,8 @@ func build(look: Dictionary) -> void:
 	_hips_bone = _skeleton.find_bone("hips")
 	_hip_height = hips.position.y
 	hand_attach = _pivot(_joint("hand_r"), Vector3(0, -0.06, 0))
-	back_attach = _pivot(spine, Vector3(0, 0.3, 0.16))
+	# Mochila: en la espalda, a media altura entre la cintura y el cuello (sirve para cualquier proporción).
+	back_attach = _pivot(spine, Vector3(0, head.position.y * 0.45, 0.17))
 
 	# Colores de este personaje y accesorios visibles.
 	var accessories: Array = look.get("accessories", [])

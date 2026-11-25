@@ -113,7 +113,7 @@ func _build_body() -> void:
 
 	_name_label = Label3D.new()
 	_name_label.text = player_name
-	_name_label.position = Vector3(0, 2.2, 0)
+	_name_label.position = Vector3(0, 1.82, 0)
 	_name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_name_label.font_size = 40
 	_name_label.outline_size = 10
