@@ -306,14 +306,14 @@ models/                Modelos 3D de los personajes (humano, sombra y bruto)
 
 ## Modelos 3D de los personajes
 
-Los personajes usan modelos 3D con esqueleto en estilo **chibi**: cabeza grande, ojos grandes con brillo, cachetes, cuerpo bajito y redondeado, y manos y botas como bolitas. Están en `models/`:
+Los personajes usan modelos 3D con esqueleto en estilo **chibi** (cabeza grande, ojos grandes con brillo, cachetes, cuerpo bajito y redondeado, y manos y botas como bolitas). Las criaturas de sombra, en cambio, son **realistas**, para que se vean temibles al lado de los personajes. Están en `models/`:
 - `humanoid.glb`: jugadores, habitantes, guardias y bandidos. Las partes de piel, pelo, camisa, pantalón, botas y capa se pintan con los colores de cada personaje, y los accesorios (pelo largo, rodete, barba, gorra, sombrero de paja, capucha, delantal, corona, casco, cota de malla, capa, vestido y pañuelo) se muestran según quién sea.
-- `shade.glb`: las sombras, como fantasmitas encapuchados con ojos que brillan, manto ondulado y garritas.
-- `brute.glb`: el bruto sombrío, redondote, con cuernitos, hombreras de hueso, puños gigantes y grietas que brillan en la panza.
+- `shade.glb`: las sombras, espectros altos y demacrados (2,1 m) con el manto hecho jirones, capucha vacía con ojos que brillan y dedos largos como garras.
+- `brute.glb`: el bruto sombrío, una bestia de 2,4 m con joroba, músculos, cuernos curvos, hombreras de hueso con púas, puños enormes y grietas que brillan.
 
 Los tres comparten el mismo esqueleto: las animaciones (caminar, correr, saltar, golpear, fabricar, encorvarse con peso) se calculan por código en `scripts/characters/humanoid.gd` y mueven sus huesos.
 
-**Para cambiarlos:** se generan con `tools/gen_characters.py` (Blender como módulo de Python: `pip install bpy`, después `python tools/gen_characters.py`). El generador también guarda el estilo anterior, más adulto e inspirado en Albion Online: `python tools/gen_characters.py --style=albion`. También se pueden abrir en Blender y retocar a mano: mientras se mantengan los nombres de los huesos (hips, spine, head, shoulder_l, elbow_l, hand_l, hip_l, knee_l, ankle_l y sus pares _r), el juego los anima igual.
+**Para cambiarlos:** se generan con `tools/gen_characters.py` (Blender como módulo de Python: `pip install bpy`, después `python tools/gen_characters.py`). El generador también guarda otros estilos para comparar: `--style=chibi` (todo chibi), `--style=realista` (todo realista) y `--style=albion` (más adulto, inspirado en Albion Online). Con `--out=<carpeta>` se guardan en otra carpeta sin tocar los del juego. También se pueden abrir en Blender y retocar a mano: mientras se mantengan los nombres de los huesos (hips, spine, head, shoulder_l, elbow_l, hand_l, hip_l, knee_l, ankle_l y sus pares _r), el juego los anima igual.
 
 ## Créditos de tipografías
 

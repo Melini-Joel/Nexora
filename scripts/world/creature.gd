@@ -81,7 +81,7 @@ func _ready() -> void:
 		humanoid.build(_data.get("look", {}))
 		humanoid.scale = Vector3.ONE * size
 		_body = humanoid
-		_add_collision(0.35 * size, 1.8 * size)
+		_add_collision(float(_data.get("radius", 0.35)) * size, float(_data.get("height", 1.8)) * size)
 	else:
 		var quadruped := Quadruped.new()
 		quadruped.build(_data.get("look", {}))
@@ -95,7 +95,7 @@ func _ready() -> void:
 	_label.font_size = 34
 	_label.outline_size = 10
 	_label.pixel_size = 0.005
-	_label.position.y = (1.6 if _data.get("body", "") == "humanoid" else 1.4) * size + 0.3
+	_label.position.y = (float(_data.get("height", 1.6)) if _data.get("body", "") == "humanoid" else 1.4) * size + 0.3
 	add_child(_label)
 	_update_label()
 

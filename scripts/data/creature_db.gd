@@ -11,7 +11,8 @@ extends RefCounted
 ##   drops: lo que recibe quien lo mata
 ##   tame: {"food", "amount", "combat"}: comida para domesticarlo, cuántas veces darle
 ##         y si pelea a tu lado una vez domesticado
-##   look: apariencia (ver Quadruped.build)
+##   look: apariencia (ver Quadruped.build; los humanoides usan "model", ver Humanoid.build)
+##   height / radius: alto y ancho del cuerpo en metros (colisión y nombre), si no es 1,8 x 0,35
 
 const SPECIES := {
 	"rabbit": {
@@ -62,12 +63,12 @@ const SPECIES := {
 	# --- Criaturas nocturnas ---
 	"shade": {
 		"name": "Sombra", "body": "humanoid", "behavior": "mob", "health": 60.0, "speed": 3.4,
-		"damage": 7.0, "drops": {"metal_fragments": 3}, "blueprint_chance": 0.3, "scale": 1.5,
+		"damage": 7.0, "drops": {"metal_fragments": 3}, "blueprint_chance": 0.3, "scale": 1.0, "height": 2.1, "radius": 0.35,
 		"look": {"model": "shade"},
 	},
 	"brute": {
 		"name": "Bruto sombrío", "body": "humanoid", "behavior": "mob", "health": 170.0, "speed": 2.8,
-		"damage": 16.0, "drops": {"metal_fragments": 10, "leather": 4}, "blueprint_chance": 0.6, "scale": 1.6,
+		"damage": 16.0, "drops": {"metal_fragments": 10, "leather": 4}, "blueprint_chance": 0.6, "scale": 1.05, "height": 2.4, "radius": 0.55,
 		"look": {"model": "brute"},
 	},
 	# --- Bandidos de Valdoria (viven en su campamento, de día y de noche) ---

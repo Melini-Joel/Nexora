@@ -1,7 +1,9 @@
 """Genera los modelos 3D de los personajes de NEXORA con Blender (bpy).
 
 Uso (con Blender instalado como módulo de Python, `pip install bpy`):
-    python tools/gen_characters.py                  (estilo chibi, el que usa el juego)
+    python tools/gen_characters.py                  (lo que usa el juego: personajes chibi y
+                                                     sombra y bruto realistas)
+    python tools/gen_characters.py --style=chibi    (todo chibi)
     python tools/gen_characters.py --style=albion   (estilo anterior, más adulto)
     python tools/gen_characters.py --style=realista (proporciones humanas y más detalle)
     Con --out=<carpeta> se guardan en otra carpeta (para comparar sin tocar el juego).
@@ -1203,7 +1205,7 @@ def build_brute_real():
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    style = "chibi"
+    style = "nexora"
     for a in args:
         if a.startswith("--style="):
             style = a.split("=", 1)[1]
@@ -1212,6 +1214,8 @@ if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
     which = [a for a in args if not a.startswith("--")] or ["humanoid", "shade", "brute"]
     builders = {
+        # Lo que usa el juego: personajes chibi y criaturas de sombra realistas.
+        "nexora": {"humanoid": build_humanoid_chibi, "shade": build_shade_real, "brute": build_brute_real},
         "chibi": {"humanoid": build_humanoid_chibi, "shade": build_shade_chibi, "brute": build_brute_chibi},
         "albion": {"humanoid": build_humanoid, "shade": build_shade, "brute": build_brute},
         "realista": {"humanoid": build_humanoid_real, "shade": build_shade_real, "brute": build_brute_real},
