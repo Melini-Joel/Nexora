@@ -5,3 +5,7 @@ export/
 build/
 *.apk
 *.keystore
+
+# Exportaciones (se generan con Proyecto → Exportar, no se suben)
+*.exe
+*.pck
